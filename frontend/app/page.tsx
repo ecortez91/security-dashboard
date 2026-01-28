@@ -27,7 +27,15 @@ interface SecurityCheck {
   message: string;
   details: Record<string, unknown>;
   recommendations: Array<{ severity: string; message: string }>;
-  fixes: Array<{ id: string; name: string; description: string; autoFix: boolean }>;
+  fixes: Array<{ 
+    id: string; 
+    name: string; 
+    description: string; 
+    autoFix: boolean;
+    script?: string;
+    command?: string;
+    manualSteps?: string[];
+  }>;
 }
 
 interface SecurityResults {
@@ -343,31 +351,72 @@ export default function Dashboard() {
                               {check.fixes.map((fix) => (
                                 <div 
                                   key={fix.id}
-                                  className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg"
+                                  className="p-3 bg-slate-900/50 rounded-lg"
                                 >
-                                  <div>
-                                    <p className="text-white text-sm font-medium">{fix.name}</p>
-                                    <p className="text-slate-400 text-xs">{fix.description}</p>
-                                  </div>
-                                  {fix.autoFix ? (
-                                    <button
-                                      onClick={() => applyFix(fix.id)}
-                                      disabled={applyingFix === fix.id}
-                                      className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                      {applyingFix === fix.id ? (
-                                        <>
-                                          <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                                          Applying...
-                                        </>
-                                      ) : (
-                                        'Apply Fix'
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-white text-sm font-medium">{fix.name}</p>
+                                      <p className="text-slate-400 text-xs">{fix.description}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {fix.script && (
+                                        <a
+                                          href={`http://localhost:4000/scripts/linux/${fix.script}.sh`}
+                                          download
+                                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg transition-all"
+                                        >
+                                          📥 Script
+                                        </a>
                                       )}
-                                    </button>
-                                  ) : (
-                                    <span className="px-3 py-1 bg-slate-700 text-slate-400 text-xs rounded-lg">
-                                      Manual Fix Required
-                                    </span>
+                                      {fix.autoFix ? (
+                                        <button
+                                          onClick={() => applyFix(fix.id)}
+                                          disabled={applyingFix === fix.id}
+                                          className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                          {applyingFix === fix.id ? (
+                                            <>
+                                              <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                                              Applying...
+                                            </>
+                                          ) : (
+                                            'Apply Fix'
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <span className="px-3 py-2 bg-amber-600/20 text-amber-400 text-xs rounded-lg border border-amber-600/30">
+                                          Manual Fix
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Manual Steps */}
+                                  {fix.manualSteps && fix.manualSteps.length > 0 && (
+                                    <div className="mt-3 p-3 bg-slate-950 rounded-lg border border-slate-700">
+                                      <p className="text-slate-300 text-xs font-semibold mb-2">📋 Manual Steps:</p>
+                                      <ol className="list-decimal list-inside space-y-1">
+                                        {fix.manualSteps.map((step, idx) => (
+                                          <li key={idx} className="text-slate-400 text-xs">
+                                            {step.startsWith('Run:') ? (
+                                              <>
+                                                Run: <code className="bg-slate-800 px-1 py-0.5 rounded text-cyan-400">{step.replace('Run: ', '')}</code>
+                                              </>
+                                            ) : (
+                                              step
+                                            )}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                      {fix.command && (
+                                        <div className="mt-2 pt-2 border-t border-slate-700">
+                                          <p className="text-slate-500 text-xs">Quick command:</p>
+                                          <code className="block mt-1 p-2 bg-slate-800 rounded text-cyan-400 text-xs select-all">
+                                            {fix.command}
+                                          </code>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               ))}
