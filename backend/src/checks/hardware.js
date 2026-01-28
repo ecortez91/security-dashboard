@@ -5,17 +5,89 @@ import { isWSL2 } from './utils.js';
 
 const execAsync = promisify(exec);
 
-// Get Windows temperature via OpenHardwareMonitor or PowerShell (if available)
+// Get hardware data from LibreHardwareMonitor web server
+async function getLibreHardwareMonitorData() {
+  try {
+    const response = await fetch('http://localhost:8085/data.json', { 
+      signal: AbortSignal.timeout(3000) 
+    });
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // LibreHardwareMonitor not running or web server not enabled
+  }
+  return null;
+}
+
+// Parse LHM data to extract temperatures
+function parseLHMTemperatures(data) {
+  const temps = { cpu: null, gpu: null, all: [] };
+  
+  function traverse(node) {
+    if (!node) return;
+    
+    // Check if this is a temperature sensor
+    if (node.Type === 'Temperature' && node.Value) {
+      const value = parseFloat(node.Value.replace(/[^0-9.]/g, ''));
+      if (!isNaN(value)) {
+        temps.all.push({ name: node.Text, value });
+        
+        // Identify CPU and GPU temps
+        const name = node.Text.toLowerCase();
+        if (name.includes('cpu') || name.includes('core')) {
+          if (!temps.cpu || value > temps.cpu) temps.cpu = value;
+        }
+        if (name.includes('gpu')) {
+          if (!temps.gpu || value > temps.gpu) temps.gpu = value;
+        }
+      }
+    }
+    
+    // Recurse into children
+    if (node.Children) {
+      for (const child of node.Children) {
+        traverse(child);
+      }
+    }
+  }
+  
+  traverse(data);
+  return temps;
+}
+
+// Parse LHM data to extract fan speeds
+function parseLHMFans(data) {
+  const fans = [];
+  
+  function traverse(node) {
+    if (!node) return;
+    
+    if (node.Type === 'Fan' && node.Value) {
+      const rpm = parseInt(node.Value.replace(/[^0-9]/g, ''));
+      fans.push({ name: node.Text, rpm: isNaN(rpm) ? 0 : rpm });
+    }
+    
+    if (node.Children) {
+      for (const child of node.Children) {
+        traverse(child);
+      }
+    }
+  }
+  
+  traverse(data);
+  return fans;
+}
+
+// Fallback: Get Windows temperature via WMI
 async function getWindowsTemperature() {
   try {
-    // Try to get temperature from Windows WMI
     const { stdout } = await execAsync(
       `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi 2>$null | Select-Object -First 1 -ExpandProperty CurrentTemperature"`,
       { timeout: 5000 }
     );
     const kelvin = parseInt(stdout.trim());
     if (kelvin && kelvin > 0) {
-      // WMI returns temperature in tenths of Kelvin
       return (kelvin / 10) - 273.15;
     }
   } catch {
@@ -36,15 +108,36 @@ export async function checkHardware() {
   };
 
   try {
+    // Check environment
+    const inWSL2 = await isWSL2();
+    result.details.environment = { wsl2: inWSL2 };
+    
+    // Try to get data from LibreHardwareMonitor first
+    let lhmData = null;
+    let lhmTemps = null;
+    let lhmFans = null;
+    
+    if (inWSL2) {
+      lhmData = await getLibreHardwareMonitorData();
+      if (lhmData) {
+        lhmTemps = parseLHMTemperatures(lhmData);
+        lhmFans = parseLHMFans(lhmData);
+        result.details.dataSource = 'LibreHardwareMonitor';
+      }
+    }
+    
     // CPU Temperature
     let temps = await si.cpuTemperature();
     
-    // In WSL2, try to get temperature from Windows
-    const inWSL2 = await isWSL2();
+    // In WSL2, use LHM data or fallback to WMI
     if (inWSL2 && !temps.main) {
-      const windowsTemp = await getWindowsTemperature();
-      if (windowsTemp) {
-        temps = { ...temps, main: Math.round(windowsTemp) };
+      if (lhmTemps?.cpu) {
+        temps = { ...temps, main: Math.round(lhmTemps.cpu) };
+      } else {
+        const windowsTemp = await getWindowsTemperature();
+        if (windowsTemp) {
+          temps = { ...temps, main: Math.round(windowsTemp) };
+        }
       }
     }
     
@@ -53,10 +146,26 @@ export async function checkHardware() {
       max: temps.max,
       cores: temps.cores,
       chipset: temps.chipset,
-      source: inWSL2 ? 'wsl2' : 'native',
+      gpu: lhmTemps?.gpu || null,
+      all: lhmTemps?.all || [],
+      source: lhmData ? 'LibreHardwareMonitor' : (inWSL2 ? 'wsl2-fallback' : 'native'),
     };
     
-    result.details.environment = { wsl2: inWSL2 };
+    // Fan data from LHM
+    if (lhmFans && lhmFans.length > 0) {
+      result.details.fans = lhmFans;
+      
+      // Check for stopped fans
+      for (const fan of lhmFans) {
+        if (fan.rpm === 0) {
+          result.status = 'critical';
+          result.recommendations.push({
+            severity: 'critical',
+            message: `Fan "${fan.name}" is not spinning (0 RPM)! Check immediately.`,
+          });
+        }
+      }
+    }
 
     // Check for high temperatures
     if (temps.main) {
@@ -78,9 +187,13 @@ export async function checkHardware() {
           message: `CPU temperature is ${temps.main}°C — warm but acceptable.`,
         });
       }
-    } else if (inWSL2) {
-      // Don't warn about temp unavailability in WSL2, just note it
-      result.details.tempNote = 'Temperature monitoring limited in WSL2. Install OpenHardwareMonitor on Windows for detailed readings.';
+    } else if (inWSL2 && !lhmData) {
+      // LibreHardwareMonitor not running
+      result.details.tempNote = 'Start LibreHardwareMonitor on Windows and enable the web server (Options → Remote Web Server) on port 8085 for temperature monitoring.';
+      result.recommendations.push({
+        severity: 'info',
+        message: 'Enable LibreHardwareMonitor web server for temperature/fan monitoring.',
+      });
     }
 
     // CPU Info
