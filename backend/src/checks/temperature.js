@@ -73,9 +73,9 @@ async function getConfig() {
 }
 
 /**
- * Fetch data from LibreHardwareMonitor web server
+ * Fetch data from LibreHardwareMonitor via HTTP
  */
-async function fetchLHMData(config) {
+function fetchLHMDataHTTP(config) {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: config.host,
@@ -83,7 +83,7 @@ async function fetchLHMData(config) {
       path: '/data.json',
       method: 'GET',
       headers: {},
-      timeout: 5000,
+      timeout: 3000,
     };
 
     if (config.username && config.password) {
@@ -122,6 +122,60 @@ async function fetchLHMData(config) {
 
     req.end();
   });
+}
+
+/**
+ * Fetch data from LHM via PowerShell (WSL fallback)
+ * Used when direct HTTP fails because LHM is bound to 127.0.0.1
+ */
+async function fetchLHMDataPowerShell(config) {
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+  
+  // Build PowerShell command
+  let psCommand = `Invoke-RestMethod -Uri 'http://localhost:${config.port}/data.json' -TimeoutSec 5`;
+  
+  if (config.username && config.password) {
+    // Escape special characters in password for PowerShell
+    const escapedPass = config.password.replace(/'/g, "''");
+    psCommand = `
+      $cred = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('${config.username}:${escapedPass}'))
+      $headers = @{ Authorization = "Basic $cred" }
+      Invoke-RestMethod -Uri 'http://localhost:${config.port}/data.json' -Headers $headers -TimeoutSec 5 | ConvertTo-Json -Depth 10
+    `;
+  }
+  
+  const { stdout } = await execAsync(
+    `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "${psCommand.replace(/"/g, '\\"')}"`,
+    { timeout: 15000 }
+  );
+  
+  return JSON.parse(stdout);
+}
+
+/**
+ * Fetch data from LibreHardwareMonitor web server
+ * Tries HTTP first, falls back to PowerShell in WSL
+ */
+async function fetchLHMData(config) {
+  const inWSL = await isWSL2();
+  
+  // Try direct HTTP first
+  try {
+    return await fetchLHMDataHTTP(config);
+  } catch (httpError) {
+    // If in WSL and HTTP failed, try PowerShell fallback
+    if (inWSL) {
+      try {
+        return await fetchLHMDataPowerShell(config);
+      } catch (psError) {
+        // Both failed, throw the more useful error
+        throw new Error(`HTTP: ${httpError.message}, PowerShell: ${psError.message}`);
+      }
+    }
+    throw httpError;
+  }
 }
 
 /**
