@@ -79,16 +79,16 @@ function parseLHMFans(data) {
   return fans;
 }
 
-// Fallback: Get Windows temperature via WMI
+// Get Windows temperature via WMI (works without extra software!)
 async function getWindowsTemperature() {
   try {
     const { stdout } = await execAsync(
-      `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi 2>$null | Select-Object -First 1 -ExpandProperty CurrentTemperature"`,
-      { timeout: 5000 }
+      `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi -ErrorAction Stop | Select-Object -First 1 -ExpandProperty CurrentTemperature"`,
+      { timeout: 8000 }
     );
     const kelvin = parseInt(stdout.trim());
     if (kelvin && kelvin > 0) {
-      return (kelvin / 10) - 273.15;
+      return Math.round(((kelvin / 10) - 273.15) * 10) / 10; // Round to 1 decimal
     }
   } catch {
     // WMI thermal zone might not be available
@@ -129,15 +129,15 @@ export async function checkHardware() {
     // CPU Temperature
     let temps = await si.cpuTemperature();
     
-    // In WSL2, use LHM data or fallback to WMI
+    // In WSL2, try WMI first (no extra software needed), then LHM as backup
     if (inWSL2 && !temps.main) {
-      if (lhmTemps?.cpu) {
+      const windowsTemp = await getWindowsTemperature();
+      if (windowsTemp) {
+        temps = { ...temps, main: windowsTemp };
+        result.details.dataSource = 'Windows WMI';
+      } else if (lhmTemps?.cpu) {
         temps = { ...temps, main: Math.round(lhmTemps.cpu) };
-      } else {
-        const windowsTemp = await getWindowsTemperature();
-        if (windowsTemp) {
-          temps = { ...temps, main: Math.round(windowsTemp) };
-        }
+        result.details.dataSource = 'LibreHardwareMonitor';
       }
     }
     
@@ -187,13 +187,9 @@ export async function checkHardware() {
           message: `CPU temperature is ${temps.main}°C — warm but acceptable.`,
         });
       }
-    } else if (inWSL2 && !lhmData) {
-      // LibreHardwareMonitor not running
-      result.details.tempNote = 'Start LibreHardwareMonitor on Windows and enable the web server (Options → Remote Web Server) on port 8085 for temperature monitoring.';
-      result.recommendations.push({
-        severity: 'info',
-        message: 'Enable LibreHardwareMonitor web server for temperature/fan monitoring.',
-      });
+    } else if (inWSL2 && !temps.main) {
+      // No temperature source available
+      result.details.tempNote = 'Temperature monitoring unavailable. For detailed sensor data, install LibreHardwareMonitor on Windows.';
     }
 
     // CPU Info
@@ -239,21 +235,25 @@ export async function checkHardware() {
       });
     }
 
-    // Disk Usage
+    // Disk Usage (filter out WSL special mounts)
     const disks = await si.fsSize();
-    result.details.disks = disks.map(d => ({
-      mount: d.mount,
-      size: formatBytes(d.size),
-      used: formatBytes(d.used),
-      usedPercent: Math.round(d.use),
-    }));
+    const ignoreMounts = ['/mnt/wsl', '/mnt/wslg', '/usr/lib/wsl', '/usr/lib/modules'];
+    
+    result.details.disks = disks
+      .filter(d => !ignoreMounts.some(m => d.mount.startsWith(m)))
+      .map(d => ({
+        mount: d.mount,
+        size: formatBytes(d.size),
+        used: formatBytes(d.used),
+        usedPercent: Math.round(d.use),
+      }));
 
-    for (const disk of disks) {
-      if (disk.use > 90) {
+    for (const disk of result.details.disks) {
+      if (disk.usedPercent > 90) {
         if (result.status === 'pass') result.status = 'warning';
         result.recommendations.push({
           severity: 'high',
-          message: `Disk ${disk.mount} is ${Math.round(disk.use)}% full — consider cleanup.`,
+          message: `Disk ${disk.mount} is ${disk.usedPercent}% full — consider cleanup.`,
         });
       }
     }
