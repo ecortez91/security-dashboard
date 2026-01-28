@@ -11,37 +11,70 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
- * Search the web for solutions to a specific issue
+ * Search for official documentation first, then alternatives
  */
 async function searchForSolutions(query, platform = 'linux') {
+  const results = {
+    officialDocs: null,
+    alternatives: [],
+    searchResults: null
+  };
+  
+  // Map platform to official doc sites
+  const officialSites = {
+    linux: ['ubuntu.com', 'wiki.archlinux.org', 'man7.org', 'kernel.org'],
+    windows: ['docs.microsoft.com', 'learn.microsoft.com', 'support.microsoft.com'],
+    macos: ['support.apple.com', 'developer.apple.com'],
+    clawdbot: ['docs.clawd.bot', 'github.com/clawdbot']
+  };
+  
   try {
-    // Use a simple web search approach
-    const searchQuery = encodeURIComponent(`${query} ${platform} fix solution`);
-    
-    // Try to use curl to fetch search results (simplified)
-    // In production, you'd use a proper search API
+    // Try DuckDuckGo for general search
+    const searchQuery = encodeURIComponent(`${query} ${platform} official documentation`);
     const { stdout } = await execAsync(
-      `curl -s "https://api.duckduckgo.com/?q=${searchQuery}&format=json&no_html=1" 2>/dev/null | head -c 5000`,
+      `curl -s "https://api.duckduckgo.com/?q=${searchQuery}&format=json&no_html=1" 2>/dev/null | head -c 8000`,
       { timeout: 10000 }
     );
     
     try {
       const data = JSON.parse(stdout);
-      return {
-        abstract: data.AbstractText || null,
-        source: data.AbstractSource || null,
-        url: data.AbstractURL || null,
-        relatedTopics: (data.RelatedTopics || []).slice(0, 3).map(t => ({
+      
+      // Check if result is from official source
+      const sites = officialSites[platform] || [];
+      const url = data.AbstractURL || '';
+      const isOfficial = sites.some(site => url.includes(site));
+      
+      if (isOfficial && data.AbstractText) {
+        results.officialDocs = {
+          text: data.AbstractText,
+          source: data.AbstractSource,
+          url: data.AbstractURL
+        };
+      }
+      
+      // Get related topics
+      results.alternatives = (data.RelatedTopics || [])
+        .filter(t => t.Text && t.FirstURL)
+        .slice(0, 5)
+        .map(t => ({
           text: t.Text,
-          url: t.FirstURL
-        }))
+          url: t.FirstURL,
+          isOfficial: sites.some(site => (t.FirstURL || '').includes(site))
+        }));
+        
+      results.searchResults = {
+        abstract: data.AbstractText,
+        source: data.AbstractSource,
+        url: data.AbstractURL
       };
     } catch {
-      return null;
+      // JSON parse failed
     }
   } catch {
-    return null;
+    // Search failed
   }
+  
+  return results;
 }
 
 /**
@@ -70,8 +103,8 @@ async function detectPlatform() {
 /**
  * Generate fix suggestions based on check results
  */
-export async function generateFixSuggestions(check) {
-  const platform = await detectPlatform();
+export async function generateFixSuggestions(check, requestedPlatform = null) {
+  const platform = requestedPlatform || await detectPlatform();
   const suggestions = {
     checkId: check.id,
     checkName: check.name,

@@ -79,12 +79,12 @@ app.get('/api/scripts/:scriptId', (req, res) => {
 // AI-powered fix suggestions
 app.post('/api/ai-fix', async (req, res) => {
   try {
-    const { check } = req.body;
+    const { check, platform } = req.body;
     if (!check) {
       return res.status(400).json({ error: 'Missing check data' });
     }
     
-    const suggestions = await generateFixSuggestions(check);
+    const suggestions = await generateFixSuggestions(check, platform);
     res.json(suggestions);
   } catch (error) {
     res.status(500).json({ error: error.message });
