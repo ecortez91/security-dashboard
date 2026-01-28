@@ -78,6 +78,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [applyingFix, setApplyingFix] = useState<string | null>(null);
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, unknown> | null>(null);
+  const [loadingAI, setLoadingAI] = useState<string | null>(null);
 
   const fetchSecurityChecks = async () => {
     setLoading(true);
@@ -112,6 +114,25 @@ export default function Dashboard() {
       alert('Failed to apply fix. Check console for details.');
     } finally {
       setApplyingFix(null);
+    }
+  };
+
+  const getAISuggestions = async (check: SecurityCheck) => {
+    setLoadingAI(check.id);
+    setAiSuggestions(null);
+    try {
+      const response = await fetch('http://localhost:4000/api/ai-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ check }),
+      });
+      const suggestions = await response.json();
+      setAiSuggestions(suggestions);
+    } catch (error) {
+      console.error('Failed to get AI suggestions:', error);
+      alert('Failed to get AI suggestions. Check console for details.');
+    } finally {
+      setLoadingAI(null);
     }
   };
 
@@ -421,6 +442,115 @@ export default function Dashboard() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* AI Suggestions Button */}
+                        {check.status !== 'pass' && (
+                          <div className="mt-4">
+                            <button
+                              onClick={() => getAISuggestions(check)}
+                              disabled={loadingAI === check.id}
+                              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {loadingAI === check.id ? (
+                                <>
+                                  <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                                  Analyzing...
+                                </>
+                              ) : (
+                                <>
+                                  🤖 AI Suggest Fix
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* AI Suggestions Display */}
+                        {aiSuggestions && (aiSuggestions as { checkId?: string }).checkId === check.id && (
+                          <div className="mt-4 p-4 bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-lg border border-purple-500/30">
+                            <h4 className="text-purple-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                              🤖 AI Analysis & Suggestions
+                            </h4>
+                            
+                            {/* Analysis */}
+                            <div className="mb-4 p-3 bg-slate-950/50 rounded-lg">
+                              <p className="text-slate-300 text-xs font-semibold mb-2">📊 Analysis:</p>
+                              <pre className="text-slate-400 text-xs whitespace-pre-wrap">
+                                {(aiSuggestions as { analysis?: string }).analysis}
+                              </pre>
+                            </div>
+                            
+                            {/* Suggested Fixes */}
+                            {(aiSuggestions as { suggestedFixes?: Array<{ title: string; description: string; steps: string[]; commands?: string[]; warning?: string; risk?: string }> }).suggestedFixes?.map((fix, idx) => (
+                              <div key={idx} className="mb-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-white text-sm font-medium">{fix.title}</p>
+                                  {fix.risk && (
+                                    <span className={`px-2 py-0.5 text-xs rounded ${
+                                      fix.risk === 'high' ? 'bg-red-600/30 text-red-400' :
+                                      fix.risk === 'medium' ? 'bg-amber-600/30 text-amber-400' :
+                                      'bg-green-600/30 text-green-400'
+                                    }`}>
+                                      {fix.risk} risk
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-slate-400 text-xs mb-2">{fix.description}</p>
+                                
+                                {fix.warning && (
+                                  <div className="mb-2 p-2 bg-amber-900/30 rounded border border-amber-600/30">
+                                    <p className="text-amber-400 text-xs">{fix.warning}</p>
+                                  </div>
+                                )}
+                                
+                                <p className="text-slate-300 text-xs font-semibold mb-1">Steps:</p>
+                                <ol className="list-decimal list-inside space-y-1 mb-2">
+                                  {fix.steps.map((step, stepIdx) => (
+                                    <li key={stepIdx} className="text-slate-400 text-xs">{step}</li>
+                                  ))}
+                                </ol>
+                                
+                                {fix.commands && fix.commands.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-slate-500 text-xs mb-1">Commands:</p>
+                                    <div className="bg-slate-950 p-2 rounded">
+                                      {fix.commands.map((cmd, cmdIdx) => (
+                                        <code key={cmdIdx} className="block text-cyan-400 text-xs select-all">{cmd}</code>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            
+                            {/* Generated Script */}
+                            {(aiSuggestions as { generatedScript?: { content: string; filename: string } }).generatedScript && (
+                              <div className="mt-3 p-3 bg-slate-900/50 rounded-lg border border-cyan-600/30">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-cyan-300 text-xs font-semibold">📜 Generated Fix Script</p>
+                                  <button
+                                    onClick={() => {
+                                      const script = (aiSuggestions as { generatedScript: { content: string; filename: string } }).generatedScript;
+                                      const blob = new Blob([script.content], { type: 'text/plain' });
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = script.filename;
+                                      a.click();
+                                      URL.revokeObjectURL(url);
+                                    }}
+                                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded transition-all"
+                                  >
+                                    📥 Download Script
+                                  </button>
+                                </div>
+                                <pre className="text-slate-400 text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                                  {(aiSuggestions as { generatedScript: { content: string } }).generatedScript.content}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
 

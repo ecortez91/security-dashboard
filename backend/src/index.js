@@ -3,6 +3,7 @@ import cors from 'cors';
 import { runAllChecks, runCheck, applyFix } from './checks/index.js';
 import { getTemperatureData } from './checks/temperature.js';
 import { scripts, getScriptsForPlatform, detectPlatform } from './scripts.js';
+import { generateFixSuggestions, searchForSolutions } from './ai-fix.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -72,6 +73,36 @@ app.get('/api/scripts/:scriptId', (req, res) => {
     return res.status(404).json({ error: 'Script not found' });
   }
   res.json(script);
+});
+
+// AI-powered fix suggestions
+app.post('/api/ai-fix', async (req, res) => {
+  try {
+    const { check } = req.body;
+    if (!check) {
+      return res.status(400).json({ error: 'Missing check data' });
+    }
+    
+    const suggestions = await generateFixSuggestions(check);
+    res.json(suggestions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Search for solutions
+app.get('/api/search-fix', async (req, res) => {
+  try {
+    const { query, platform } = req.query;
+    if (!query) {
+      return res.status(400).json({ error: 'Missing query parameter' });
+    }
+    
+    const results = await searchForSolutions(query, platform || 'linux');
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(PORT, () => {
