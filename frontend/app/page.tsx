@@ -636,12 +636,65 @@ export default function Dashboard() {
                           </select>
                         </div>
 
-                        {/* Analysis */}
+                        {/* Analysis - Human readable summary */}
                         <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                          <h4 className="text-purple-300 text-sm font-semibold mb-2">📊 Analysis</h4>
-                          <pre className="text-slate-300 text-sm whitespace-pre-wrap font-mono">
-                            {(aiSuggestions as { analysis?: string }).analysis}
-                          </pre>
+                          <h4 className="text-purple-300 text-sm font-semibold mb-3">📊 Analysis Summary</h4>
+                          
+                          {/* Issue Summary */}
+                          <div className="flex flex-wrap gap-3 mb-4">
+                            {modalCheck?.status === 'critical' && (
+                              <div className="flex items-center gap-2 px-3 py-2 bg-red-900/30 rounded-lg border border-red-600/30">
+                                <span className="text-red-400 text-lg">🔴</span>
+                                <div>
+                                  <p className="text-red-400 font-semibold text-sm">Critical Issue</p>
+                                  <p className="text-red-300/70 text-xs">Needs immediate attention</p>
+                                </div>
+                              </div>
+                            )}
+                            {modalCheck?.status === 'warning' && (
+                              <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/30 rounded-lg border border-amber-600/30">
+                                <span className="text-amber-400 text-lg">🟡</span>
+                                <div>
+                                  <p className="text-amber-400 font-semibold text-sm">Warning</p>
+                                  <p className="text-amber-300/70 text-xs">Should be addressed</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* What's wrong - plain language */}
+                          <div className="mb-4">
+                            <p className="text-slate-400 text-xs font-semibold mb-1">What&apos;s wrong:</p>
+                            <p className="text-white text-sm">{modalCheck?.message}</p>
+                          </div>
+
+                          {/* Key issues list */}
+                          {modalCheck?.recommendations && modalCheck.recommendations.length > 0 && (
+                            <div className="mb-4">
+                              <p className="text-slate-400 text-xs font-semibold mb-2">Issues found:</p>
+                              <ul className="space-y-1">
+                                {modalCheck.recommendations.slice(0, 5).map((rec, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm">
+                                    <span className={rec.severity === 'critical' ? 'text-red-400' : rec.severity === 'high' ? 'text-amber-400' : 'text-slate-400'}>
+                                      {rec.severity === 'critical' ? '🔴' : rec.severity === 'high' ? '🟡' : '🔵'}
+                                    </span>
+                                    <span className="text-slate-300">{rec.message.split(']').pop()?.trim() || rec.message}</span>
+                                  </li>
+                                ))}
+                                {modalCheck.recommendations.length > 5 && (
+                                  <li className="text-slate-500 text-xs ml-6">...and {modalCheck.recommendations.length - 5} more</li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Collapsible full details */}
+                          <details className="mt-3">
+                            <summary className="text-slate-500 text-xs cursor-pointer hover:text-slate-400">📄 See complete technical details</summary>
+                            <pre className="mt-2 p-3 bg-slate-950 rounded-lg text-slate-400 text-xs overflow-x-auto max-h-48 overflow-y-auto">
+                              {(aiSuggestions as { analysis?: string }).analysis}
+                            </pre>
+                          </details>
                         </div>
 
                         {/* Disclaimer - shows once */}
