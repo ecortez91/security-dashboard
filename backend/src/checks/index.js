@@ -8,8 +8,10 @@ import { checkRunningServices } from './services.js';
 import { checkNetworkExposure } from './network.js';
 import { checkHardware } from './hardware.js';
 import { checkTemperature } from './temperature.js';
+import { checkClawdbot } from './clawdbot.js';
 
 const checks = {
+  clawdbot: checkClawdbot,
   temperature: checkTemperature,
   hardware: checkHardware,
   openPorts: checkOpenPorts,

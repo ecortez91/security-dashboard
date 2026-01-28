@@ -4,6 +4,7 @@ import { runAllChecks, runCheck, applyFix } from './checks/index.js';
 import { getTemperatureData } from './checks/temperature.js';
 import { scripts, getScriptsForPlatform, detectPlatform } from './scripts.js';
 import { generateFixSuggestions, searchForSolutions } from './ai-fix.js';
+import { checkClawdbot, checkClawdbotDeep } from './checks/clawdbot.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -100,6 +101,26 @@ app.get('/api/search-fix', async (req, res) => {
     
     const results = await searchForSolutions(query, platform || 'linux');
     res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clawdbot security audit
+app.get('/api/clawdbot/audit', async (req, res) => {
+  try {
+    const result = await checkClawdbot();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clawdbot deep audit
+app.get('/api/clawdbot/audit/deep', async (req, res) => {
+  try {
+    const result = await checkClawdbotDeep();
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
