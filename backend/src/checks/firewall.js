@@ -33,7 +33,6 @@ export async function checkFirewall() {
     let iptablesRules = 0;
     try {
       const { stdout } = await execAsync('sudo iptables -L -n 2>/dev/null || iptables -L -n 2>/dev/null');
-      // Count non-empty, non-header lines
       iptablesRules = stdout.split('\n').filter(line => 
         line.trim() && 
         !line.startsWith('Chain') && 
@@ -63,17 +62,26 @@ export async function checkFirewall() {
       };
 
       const allEnabled = profiles.every(p => p.enabled);
+      const disabledProfiles = profiles.filter(p => !p.enabled).map(p => p.name);
+      
       if (!allEnabled) {
         result.status = 'warning';
         result.recommendations.push({
           severity: 'high',
-          message: 'Some Windows Firewall profiles are disabled',
+          message: `Windows Firewall disabled for: ${disabledProfiles.join(', ')}`,
         });
         result.fixes.push({
           id: 'enable_windows_firewall',
           name: 'Enable Windows Firewall',
           description: 'Enable all Windows Firewall profiles for maximum protection',
           autoFix: true,
+          script: 'enable-firewall',
+          manualSteps: [
+            'Open Windows Security',
+            'Click "Firewall & network protection"',
+            'Click on each network type (Domain, Private, Public)',
+            'Turn "Windows Defender Firewall" to ON'
+          ]
         });
       }
     } catch {
@@ -89,21 +97,38 @@ export async function checkFirewall() {
       result.message = 'No active firewall detected!';
       result.recommendations.push({
         severity: 'critical',
-        message: 'Enable a firewall immediately. Your system is exposed.',
+        message: 'Your system has no firewall protection. All network ports are potentially exposed to attackers.',
       });
       result.fixes.push({
         id: 'enable_ufw',
-        name: 'Enable UFW Firewall',
-        description: 'Enable the Uncomplicated Firewall (UFW) with default deny incoming policy',
+        name: 'Enable Firewall (Linux)',
+        description: 'Enable UFW/firewalld/iptables with secure defaults',
         autoFix: true,
+        script: 'enable-firewall',
+        manualSteps: [
+          'Run: sudo ufw enable',
+          'Run: sudo ufw default deny incoming',
+          'Run: sudo ufw default allow outgoing',
+          'Run: sudo ufw allow ssh (to prevent lockout)',
+          'Run: sudo ufw status (verify)'
+        ]
       });
     } else {
       result.message = 'Firewall is active';
+      
+      // Add recommendation for additional hardening
+      if (result.details.windowsFirewall?.available) {
+        result.recommendations.push({
+          severity: 'info',
+          message: 'Consider reviewing firewall rules to ensure only necessary ports are open',
+        });
+      }
     }
 
   } catch (error) {
     result.status = 'error';
     result.message = `Failed to check firewall: ${error.message}`;
+    result.details.error = error.message;
   }
 
   return result;
