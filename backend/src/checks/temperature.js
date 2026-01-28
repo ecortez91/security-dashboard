@@ -3,32 +3,208 @@
  * 
  * Dedicated temperature monitoring using thermal-pulse.
  * Provides detailed CPU/GPU temperature data with status thresholds.
+ * 
+ * WSL2 Compatible: Auto-detects Windows host IP when running in WSL.
  */
 
-import { config as defaultConfig } from '../../../tools/thermal-pulse/src/config.js';
-import * as sensors from '../../../tools/thermal-pulse/src/sensors.js';
-import { getStatusText, getStatusEmoji } from '../../../tools/thermal-pulse/src/formatter.js';
+import { readFile } from 'fs/promises';
+import http from 'http';
 
-// Re-export for direct API use
-export { sensors };
+// Thresholds (matching thermal-pulse defaults)
+const defaultThresholds = {
+  cpu: { warning: 75, critical: 90 },
+  gpu: { warning: 80, critical: 95 }
+};
+
+/**
+ * Detect if running inside WSL2
+ */
+async function isWSL2() {
+  try {
+    const release = await readFile('/proc/version', 'utf8');
+    return release.toLowerCase().includes('microsoft') || release.toLowerCase().includes('wsl');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get Windows host IP when running in WSL2
+ * Uses the nameserver from /etc/resolv.conf (works in NAT mode)
+ */
+async function getWindowsHostIP() {
+  try {
+    const resolv = await readFile('/etc/resolv.conf', 'utf8');
+    const match = resolv.match(/nameserver\s+(\d+\.\d+\.\d+\.\d+)/);
+    if (match) {
+      return match[1];
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
 
 /**
  * Get temperature configuration
- * Falls back to thermal-pulse defaults if not set
+ * Auto-detects Windows host IP in WSL2
  */
-function getConfig() {
+async function getConfig() {
+  let host = process.env.LHM_HOST || 'localhost';
+  
+  // In WSL2, we need the Windows host IP to reach LHM
+  if (host === 'localhost' || host === '127.0.0.1') {
+    const inWSL = await isWSL2();
+    if (inWSL) {
+      const windowsIP = await getWindowsHostIP();
+      if (windowsIP) {
+        host = windowsIP;
+      }
+    }
+  }
+  
   return {
-    host: process.env.LHM_HOST || defaultConfig.lhm.host,
-    port: parseInt(process.env.LHM_PORT, 10) || defaultConfig.lhm.port,
-    username: process.env.LHM_USERNAME || defaultConfig.lhm.username,
-    password: process.env.LHM_PASSWORD || defaultConfig.lhm.password,
-    thresholds: defaultConfig.thresholds,
+    host,
+    port: parseInt(process.env.LHM_PORT, 10) || 8085,
+    username: process.env.LHM_USERNAME || '',
+    password: process.env.LHM_PASSWORD || '',
+    thresholds: defaultThresholds,
   };
 }
 
 /**
+ * Fetch data from LibreHardwareMonitor web server
+ */
+async function fetchLHMData(config) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: config.host,
+      port: config.port,
+      path: '/data.json',
+      method: 'GET',
+      headers: {},
+      timeout: 5000,
+    };
+
+    if (config.username && config.password) {
+      const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
+      options.headers['Authorization'] = `Basic ${auth}`;
+    }
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      
+      if (res.statusCode === 401) {
+        reject(new Error('Authentication failed'));
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`Invalid JSON: ${e.message}`));
+        }
+      });
+    });
+
+    req.on('error', (e) => reject(new Error(`Connection failed: ${e.message}`)));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Parse value string like "76.0 °C" into number
+ */
+function parseValue(valueStr) {
+  if (!valueStr || valueStr === 'Value') return null;
+  const match = valueStr.match(/^([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Extract sensors from LHM tree structure
+ */
+function extractSensors(node, path = []) {
+  const sensors = [];
+  const currentPath = node.Text ? [...path, node.Text] : path;
+  
+  if (node.Value && node.Value !== 'Value') {
+    const value = parseValue(node.Value);
+    const min = parseValue(node.Min);
+    const max = parseValue(node.Max);
+    
+    // Determine category
+    let category = 'Other';
+    const pathStr = currentPath.join(' ');
+    
+    if (pathStr.match(/Intel|AMD|CPU/i) && !pathStr.includes('GPU')) {
+      category = 'CPU';
+    } else if (pathStr.match(/NVIDIA|Radeon|GPU/i)) {
+      category = 'GPU';
+    } else if (pathStr.match(/DIMM|Memory/i)) {
+      category = 'Memory';
+    } else if (pathStr.match(/SSD|NVMe|WD_BLACK|Samsung|Drive/i)) {
+      category = 'Storage';
+    } else if (pathStr.match(/Nuvoton|ITE|Motherboard|System/i)) {
+      category = 'Motherboard';
+    }
+    
+    // Determine type
+    let type = 'Unknown';
+    for (const segment of currentPath) {
+      if (segment === 'Temperatures') type = 'Temperature';
+      else if (segment === 'Fans') type = 'Fan';
+      else if (segment === 'Load') type = 'Load';
+    }
+    
+    if (value !== null) {
+      sensors.push({ name: node.Text, value, min, max, category, type });
+    }
+  }
+  
+  if (node.Children) {
+    for (const child of node.Children) {
+      sensors.push(...extractSensors(child, currentPath));
+    }
+  }
+  
+  return sensors;
+}
+
+/**
+ * Get status text based on temperature
+ */
+function getStatusText(temp, type = 'cpu') {
+  const thresholds = defaultThresholds[type];
+  if (temp >= thresholds.critical) return 'CRITICAL';
+  if (temp >= thresholds.warning) return 'WARNING';
+  return 'OK';
+}
+
+/**
+ * Get status emoji
+ */
+function getStatusEmoji(temp, type = 'cpu') {
+  const thresholds = defaultThresholds[type];
+  if (temp >= thresholds.critical) return '🔴';
+  if (temp >= thresholds.warning) return '🟡';
+  return '🟢';
+}
+
+/**
  * Security-focused temperature check
- * Returns results compatible with the security dashboard format
  */
 export async function checkTemperature() {
   const result = {
@@ -41,43 +217,50 @@ export async function checkTemperature() {
     fixes: [],
   };
 
-  const conf = getConfig();
-
   try {
-    // Get snapshot from thermal-pulse
-    const snapshot = await sensors.getSnapshot();
+    const config = await getConfig();
+    result.details.source = `LibreHardwareMonitor (${config.host}:${config.port})`;
+    result.details.wsl2 = await isWSL2();
     
-    result.details.timestamp = snapshot.timestamp.toISOString();
-    result.details.source = 'LibreHardwareMonitor (thermal-pulse)';
+    const rawData = await fetchLHMData(config);
+    const allSensors = extractSensors(rawData);
+    const temperatures = allSensors.filter(s => s.type === 'Temperature');
     
-    // CPU Temperature
-    const cpuTemp = snapshot.summary.cpu.package;
-    const cpuAvg = snapshot.summary.cpu.average;
-    const cpuMax = snapshot.summary.cpu.max;
+    result.details.timestamp = new Date().toISOString();
     
+    // Find key temperatures
+    const cpuTemps = temperatures.filter(t => 
+      t.category === 'CPU' && !t.name.includes('Distance')
+    );
+    const gpuTemps = temperatures.filter(t => t.category === 'GPU');
+    
+    const cpuPackage = cpuTemps.find(t => t.name.includes('Package') || t.name === 'Core Max');
+    const cpuAverage = cpuTemps.find(t => t.name.includes('Average'));
+    const gpuCore = gpuTemps.find(t => t.name === 'GPU Core');
+    const gpuHotspot = gpuTemps.find(t => t.name.includes('Hot Spot'));
+    
+    // CPU details
+    const cpuTemp = cpuPackage?.value ?? null;
     result.details.cpu = {
       current: cpuTemp,
-      average: cpuAvg,
-      sessionMax: cpuMax,
+      average: cpuAverage?.value ?? null,
+      sessionMax: cpuPackage?.max ?? null,
       status: cpuTemp !== null ? getStatusText(cpuTemp, 'cpu') : 'UNKNOWN',
       emoji: cpuTemp !== null ? getStatusEmoji(cpuTemp, 'cpu') : '❓',
     };
     
-    // GPU Temperature
-    const gpuCore = snapshot.summary.gpu.core;
-    const gpuHotspot = snapshot.summary.gpu.hotspot;
-    const gpuMax = snapshot.summary.gpu.max;
-    
+    // GPU details
+    const gpuCoreTemp = gpuCore?.value ?? null;
     result.details.gpu = {
-      current: gpuCore,
-      hotspot: gpuHotspot,
-      sessionMax: gpuMax,
-      status: gpuCore !== null ? getStatusText(gpuCore, 'gpu') : 'UNKNOWN',
-      emoji: gpuCore !== null ? getStatusEmoji(gpuCore, 'gpu') : '❓',
+      current: gpuCoreTemp,
+      hotspot: gpuHotspot?.value ?? null,
+      sessionMax: gpuCore?.max ?? null,
+      status: gpuCoreTemp !== null ? getStatusText(gpuCoreTemp, 'gpu') : 'UNKNOWN',
+      emoji: gpuCoreTemp !== null ? getStatusEmoji(gpuCoreTemp, 'gpu') : '❓',
     };
     
-    // All temperatures for detailed view
-    result.details.allTemps = snapshot.temperatures
+    // All temperatures
+    result.details.allTemps = temperatures
       .filter(t => !t.name.includes('Distance') && !t.name.includes('Limit') && !t.name.includes('Resolution'))
       .map(t => ({
         name: t.name,
@@ -87,39 +270,37 @@ export async function checkTemperature() {
         max: t.max,
       }));
     
-    // Determine overall status and recommendations
-    const thresholds = conf.thresholds;
+    // Check thresholds and set status
+    const thresholds = config.thresholds;
     
-    // CPU status
     if (cpuTemp !== null) {
       if (cpuTemp >= thresholds.cpu.critical) {
         result.status = 'critical';
         result.recommendations.push({
           severity: 'critical',
-          message: `🔴 CPU temperature is ${cpuTemp.toFixed(1)}°C — CRITICAL! Immediate action required.`,
+          message: `🔴 CPU temperature is ${cpuTemp.toFixed(1)}°C — CRITICAL!`,
         });
       } else if (cpuTemp >= thresholds.cpu.warning) {
         if (result.status === 'pass') result.status = 'warning';
         result.recommendations.push({
           severity: 'high',
-          message: `🟡 CPU temperature is ${cpuTemp.toFixed(1)}°C — running warm. Check cooling.`,
+          message: `🟡 CPU temperature is ${cpuTemp.toFixed(1)}°C — running warm.`,
         });
       }
     }
     
-    // GPU status
-    if (gpuCore !== null) {
-      if (gpuCore >= thresholds.gpu.critical) {
+    if (gpuCoreTemp !== null) {
+      if (gpuCoreTemp >= thresholds.gpu.critical) {
         result.status = 'critical';
         result.recommendations.push({
           severity: 'critical',
-          message: `🔴 GPU temperature is ${gpuCore.toFixed(1)}°C — CRITICAL! Check GPU cooling immediately.`,
+          message: `🔴 GPU temperature is ${gpuCoreTemp.toFixed(1)}°C — CRITICAL!`,
         });
-      } else if (gpuCore >= thresholds.gpu.warning) {
+      } else if (gpuCoreTemp >= thresholds.gpu.warning) {
         if (result.status === 'pass') result.status = 'warning';
         result.recommendations.push({
           severity: 'high',
-          message: `🟡 GPU temperature is ${gpuCore.toFixed(1)}°C — running warm.`,
+          message: `🟡 GPU temperature is ${gpuCoreTemp.toFixed(1)}°C — running warm.`,
         });
       }
     }
@@ -131,7 +312,7 @@ export async function checkTemperature() {
       result.message = 'Temperatures elevated';
     } else {
       const cpuStr = cpuTemp !== null ? `${cpuTemp.toFixed(0)}°C` : 'N/A';
-      const gpuStr = gpuCore !== null ? `${gpuCore.toFixed(0)}°C` : 'N/A';
+      const gpuStr = gpuCoreTemp !== null ? `${gpuCoreTemp.toFixed(0)}°C` : 'N/A';
       result.message = `Temps OK — CPU: ${cpuStr}, GPU: ${gpuStr}`;
     }
     
@@ -157,19 +338,43 @@ export async function checkTemperature() {
  */
 export async function getTemperatureData() {
   try {
-    const snapshot = await sensors.getSnapshot();
+    const config = await getConfig();
+    const rawData = await fetchLHMData(config);
+    const allSensors = extractSensors(rawData);
+    const temperatures = allSensors.filter(s => s.type === 'Temperature');
+    
+    // Find key temps
+    const cpuTemps = temperatures.filter(t => t.category === 'CPU' && !t.name.includes('Distance'));
+    const gpuTemps = temperatures.filter(t => t.category === 'GPU');
+    
+    const cpuPackage = cpuTemps.find(t => t.name.includes('Package') || t.name === 'Core Max');
+    const gpuCore = gpuTemps.find(t => t.name === 'GPU Core');
+    
     return {
       success: true,
-      timestamp: snapshot.timestamp.toISOString(),
-      summary: snapshot.summary,
-      temperatures: snapshot.temperatures.map(t => ({
-        name: t.name,
-        value: t.value,
-        unit: t.unit,
-        category: t.category,
-        min: t.min,
-        max: t.max,
-      })),
+      timestamp: new Date().toISOString(),
+      host: config.host,
+      summary: {
+        cpu: {
+          package: cpuPackage?.value ?? null,
+          average: cpuTemps.find(t => t.name.includes('Average'))?.value ?? null,
+          max: cpuPackage?.max ?? null,
+        },
+        gpu: {
+          core: gpuCore?.value ?? null,
+          hotspot: gpuTemps.find(t => t.name.includes('Hot Spot'))?.value ?? null,
+          max: gpuCore?.max ?? null,
+        }
+      },
+      temperatures: temperatures
+        .filter(t => !t.name.includes('Distance') && !t.name.includes('Limit'))
+        .map(t => ({
+          name: t.name,
+          value: t.value,
+          category: t.category,
+          min: t.min,
+          max: t.max,
+        })),
     };
   } catch (error) {
     return {
