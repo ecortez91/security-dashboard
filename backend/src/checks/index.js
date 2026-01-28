@@ -24,6 +24,7 @@ export async function runAllChecks() {
     overallScore: 0,
     totalChecks: Object.keys(checks).length,
     passed: 0,
+    info: 0,
     warnings: 0,
     critical: 0,
     checks: [],
@@ -36,6 +37,7 @@ export async function runAllChecks() {
       results.checks.push(result);
 
       if (result.status === 'pass') results.passed++;
+      else if (result.status === 'info') results.info++;
       else if (result.status === 'warning') results.warnings++;
       else if (result.status === 'critical') results.critical++;
     } catch (error) {
@@ -49,8 +51,9 @@ export async function runAllChecks() {
   }
 
   // Calculate overall score (0-100)
+  // 'info' status counts as pass (100 points) since it's just informational
   results.overallScore = Math.round(
-    ((results.passed * 100) + (results.warnings * 50)) / results.totalChecks
+    (((results.passed + results.info) * 100) + (results.warnings * 50)) / results.totalChecks
   );
 
   return results;

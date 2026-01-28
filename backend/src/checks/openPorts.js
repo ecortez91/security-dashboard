@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { isWSL2, getWSLNetworkMode } from './utils.js';
 
 const execAsync = promisify(exec);
 
@@ -15,6 +16,10 @@ export async function checkOpenPorts() {
   };
 
   try {
+    // Detect WSL2 environment
+    const inWSL2 = await isWSL2();
+    const wslMode = inWSL2 ? await getWSLNetworkMode() : null;
+    
     // Check listening ports
     const { stdout } = await execAsync('ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null');
     const lines = stdout.split('\n').filter(line => line.includes('LISTEN'));
@@ -63,27 +68,43 @@ export async function checkOpenPorts() {
       exposedPorts,
       localPorts,
       totalListening: exposedPorts.length + localPorts.length,
+      environment: {
+        wsl2: inWSL2,
+        networkMode: wslMode,
+      },
     };
 
     if (exposedPorts.length > 0) {
-      result.status = 'warning';
-      result.message = `${exposedPorts.length} port(s) are listening on all interfaces`;
-      
-      for (const port of exposedPorts) {
-        result.recommendations.push({
-          severity: 'medium',
-          message: `Port ${port.port} (${port.process}) is exposed to all interfaces. Consider binding to localhost only.`,
-        });
+      // In WSL2 NAT mode, exposed ports are not a real security risk
+      if (inWSL2 && wslMode === 'nat') {
+        result.status = 'info';
+        result.message = `${exposedPorts.length} port(s) on all interfaces (safe in WSL2 NAT mode)`;
+        result.details.wsl2Note = 'WSL2 NAT mode isolates these ports from external networks. Only your Windows host can access them via localhost forwarding.';
         
-        // Only add fix for known safe services
-        if (['node', 'python', 'python3'].includes(port.process)) {
-          result.fixes.push({
-            id: `close_port_${port.port}`,
-            name: `Restrict port ${port.port} to localhost`,
-            description: `Change ${port.process} to bind to 127.0.0.1:${port.port} instead of 0.0.0.0:${port.port}`,
-            autoFix: false,
-            manual: true,
+        result.recommendations.push({
+          severity: 'info',
+          message: '✓ WSL2 NAT mode detected — ports are isolated from external networks and protected by Windows Firewall.',
+        });
+      } else {
+        result.status = 'warning';
+        result.message = `${exposedPorts.length} port(s) are listening on all interfaces`;
+        
+        for (const port of exposedPorts) {
+          result.recommendations.push({
+            severity: 'medium',
+            message: `Port ${port.port} (${port.process}) is exposed to all interfaces. Consider binding to localhost only.`,
           });
+          
+          // Only add fix for known safe services
+          if (['node', 'python', 'python3'].includes(port.process)) {
+            result.fixes.push({
+              id: `close_port_${port.port}`,
+              name: `Restrict port ${port.port} to localhost`,
+              description: `Change ${port.process} to bind to 127.0.0.1:${port.port} instead of 0.0.0.0:${port.port}`,
+              autoFix: false,
+              manual: true,
+            });
+          }
         }
       }
     } else {

@@ -19,7 +19,7 @@ export const fixes = {
   // Enable Windows Firewall
   enable_windows_firewall: async () => {
     try {
-      await execAsync('powershell.exe -Command "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True"');
+      await execAsync('/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True"');
       return { success: true, message: 'Windows Firewall enabled for all profiles' };
     } catch (error) {
       return { success: false, message: error.message };

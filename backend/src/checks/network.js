@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { isWSL2, getWSLNetworkMode } from './utils.js';
 
 const execAsync = promisify(exec);
 
@@ -19,15 +20,21 @@ export async function checkNetworkExposure() {
   };
 
   try {
+    // Detect WSL2 environment
+    const inWSL2 = await isWSL2();
+    const wslMode = inWSL2 ? await getWSLNetworkMode() : null;
+    
+    result.details.environment = {
+      wsl2: inWSL2,
+      networkMode: wslMode,
+    };
+
     // Get network interfaces
     try {
       const { stdout } = await execAsync('ip addr show 2>/dev/null || ifconfig 2>/dev/null');
       const interfaces = [];
       
       // Parse interface info
-      const ifaceRegex = /^\d+:\s+(\S+):|^(\S+):/gm;
-      const ipRegex = /inet\s+(\d+\.\d+\.\d+\.\d+)/g;
-      
       let currentIface = '';
       for (const line of stdout.split('\n')) {
         const ifaceMatch = line.match(/^\d+:\s+(\S+):|^(\S+):/);
@@ -42,7 +49,7 @@ export async function checkNetworkExposure() {
             ip: ipMatch[1],
             isPrivate: ipMatch[1].startsWith('10.') || 
                       ipMatch[1].startsWith('192.168.') ||
-                      ipMatch[1].startsWith('172.16.') ||
+                      ipMatch[1].startsWith('172.') ||
                       ipMatch[1].startsWith('127.'),
           });
         }
@@ -79,14 +86,30 @@ export async function checkNetworkExposure() {
       }
 
       if (result.details.exposedServices.length > 0) {
-        result.status = 'warning';
-        result.message = `${result.details.exposedServices.length} service(s) exposed on all interfaces`;
-        
-        for (const svc of result.details.exposedServices) {
+        // In WSL2 NAT mode, this is not a real concern
+        if (inWSL2 && wslMode === 'nat') {
+          result.status = 'info';
+          result.message = `${result.details.exposedServices.length} service(s) on all interfaces (isolated by WSL2 NAT)`;
+          result.details.wsl2Note = 'In WSL2 NAT mode, services bound to 0.0.0.0 are NOT accessible from external networks. The WSL2 virtual network (172.x.x.x) is isolated, and Windows Firewall protects the host.';
+          
           result.recommendations.push({
-            severity: 'medium',
-            message: `Port ${svc.port} (${svc.process}) is bound to 0.0.0.0 - accessible from any network interface`,
+            severity: 'info',
+            message: '✓ WSL2 NAT mode provides network isolation. External devices cannot reach these services directly.',
           });
+          result.recommendations.push({
+            severity: 'info',
+            message: '✓ Only your Windows host can access these ports via localhost forwarding.',
+          });
+        } else {
+          result.status = 'warning';
+          result.message = `${result.details.exposedServices.length} service(s) exposed on all interfaces`;
+          
+          for (const svc of result.details.exposedServices) {
+            result.recommendations.push({
+              severity: 'medium',
+              message: `Port ${svc.port} (${svc.process}) is bound to 0.0.0.0 - accessible from any network interface`,
+            });
+          }
         }
       }
     } catch {
@@ -94,21 +117,27 @@ export async function checkNetworkExposure() {
     }
 
     // Check for port forwarding in WSL
-    try {
-      const { stdout } = await execAsync('powershell.exe -Command "netsh interface portproxy show all" 2>/dev/null');
-      if (stdout.trim() && !stdout.includes('no entries')) {
-        const lines = stdout.split('\n').filter(l => l.includes(':'));
-        result.details.portForwarding = lines.length;
-        
-        if (lines.length > 0) {
+    if (inWSL2) {
+      try {
+        const { stdout } = await execAsync('/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "netsh interface portproxy show v4tov4" 2>/dev/null');
+        if (stdout.trim() && stdout.includes(':')) {
+          const lines = stdout.split('\n').filter(l => l.includes(':'));
+          result.details.portForwarding = {
+            enabled: true,
+            rules: lines.length,
+          };
+          
+          result.status = 'warning';
           result.recommendations.push({
             severity: 'medium',
-            message: `${lines.length} port forwarding rule(s) configured in Windows`,
+            message: `${lines.length} Windows port forwarding rule(s) detected — these expose WSL2 ports to your network!`,
           });
+        } else {
+          result.details.portForwarding = { enabled: false, rules: 0 };
         }
+      } catch {
+        result.details.portForwarding = { enabled: false, rules: 0 };
       }
-    } catch {
-      // Not WSL or no port forwarding
     }
 
     // Check default gateway

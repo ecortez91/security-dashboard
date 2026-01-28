@@ -15,6 +15,7 @@ import {
   ComputerDesktopIcon,
   CommandLineIcon,
   CloudIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface SecurityCheck {
@@ -34,6 +35,7 @@ interface SecurityResults {
   overallScore: number;
   totalChecks: number;
   passed: number;
+  info: number;
   warnings: number;
   critical: number;
   checks: SecurityCheck[];
@@ -59,7 +61,7 @@ const statusIcons = {
   warning: ExclamationTriangleIcon,
   critical: XCircleIcon,
   error: XCircleIcon,
-  info: ShieldCheckIcon,
+  info: InformationCircleIcon,
 };
 
 export default function Dashboard() {
@@ -218,7 +220,7 @@ export default function Dashboard() {
                   <CheckCircleIcon className="w-8 h-8 text-emerald-500" />
                   <div>
                     <p className="text-emerald-400 text-sm">Passed</p>
-                    <p className="text-3xl font-bold text-white">{results.passed}</p>
+                    <p className="text-3xl font-bold text-white">{results.passed + (results.info || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -233,6 +235,19 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* WSL2 Info Banner */}
+            {results.info > 0 && (
+              <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-4">
+                <ShieldCheckIcon className="w-10 h-10 text-blue-500 flex-shrink-0" />
+                <div>
+                  <h3 className="text-blue-400 font-semibold text-lg">WSL2 Environment Detected</h3>
+                  <p className="text-blue-300/80">
+                    {results.info} check(s) show informational status — not security risks in your isolated WSL2 NAT environment.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Critical Alert */}
             {results.critical > 0 && (

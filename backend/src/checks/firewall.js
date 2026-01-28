@@ -49,7 +49,7 @@ export async function checkFirewall() {
 
     // Check Windows Firewall (if running in WSL)
     try {
-      const { stdout } = await execAsync('powershell.exe -Command "Get-NetFirewallProfile | Select-Object Name,Enabled" 2>/dev/null');
+      const { stdout } = await execAsync('/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Get-NetFirewallProfile | Select-Object Name,Enabled" 2>/dev/null');
       const profiles = stdout.split('\n')
         .filter(line => line.includes('True') || line.includes('False'))
         .map(line => {
