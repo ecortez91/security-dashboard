@@ -79,6 +79,20 @@ function parseLHMFans(data) {
   return fans;
 }
 
+// Get sensor data from OpenHardwareMonitor WMI
+async function getOHMSensors() {
+  try {
+    const { stdout } = await execAsync(
+      `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -ErrorAction Stop | Select-Object Name, SensorType, Value, Parent | ConvertTo-Json"`,
+      { timeout: 10000 }
+    );
+    const sensors = JSON.parse(stdout);
+    return Array.isArray(sensors) ? sensors : [sensors];
+  } catch {
+    return null;
+  }
+}
+
 // Get NVIDIA GPU info via nvidia-smi
 async function getNvidiaGPUInfo() {
   try {
@@ -167,6 +181,39 @@ export async function checkHardware() {
     
     // Get NVIDIA GPU info
     const gpuInfo = inWSL2 ? await getNvidiaGPUInfo() : null;
+    
+    // Get OpenHardwareMonitor data (for fans)
+    const ohmSensors = inWSL2 ? await getOHMSensors() : null;
+    
+    // Extract fan data from OHM
+    if (ohmSensors) {
+      const fans = ohmSensors.filter(s => s.SensorType === 'Fan');
+      if (fans.length > 0) {
+        result.details.fans = fans.map(f => ({
+          name: f.Name + (f.Parent?.includes('nvidia') ? ' (GPU)' : ''),
+          rpm: Math.round(f.Value),
+        }));
+        
+        // Check for stopped fans
+        for (const fan of result.details.fans) {
+          if (fan.rpm === 0) {
+            // Only alert if temp is high (fan might be in 0 RPM mode)
+            const relatedTemp = ohmSensors.find(s => 
+              s.SensorType === 'Temperature' && 
+              s.Parent === fans.find(f2 => f2.Name === fan.name.replace(' (GPU)', ''))?.Parent
+            );
+            if (relatedTemp && relatedTemp.Value > 60) {
+              result.status = 'critical';
+              result.recommendations.push({
+                severity: 'critical',
+                message: `${fan.name} is at 0 RPM but temp is ${relatedTemp.Value}°C — check fan!`,
+              });
+            }
+          }
+        }
+      }
+      result.details.ohmConnected = true;
+    }
     
     result.details.temperature = {
       cpu: temps.main,
