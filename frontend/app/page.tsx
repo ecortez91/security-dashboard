@@ -688,27 +688,32 @@ export default function Dashboard() {
                               </div>
                             )}
                             
-                            {/* Steps suggested */}
-                            {fix.steps && fix.steps.length > 0 && (
+                            {/* Determine fix type and show appropriate label */}
+                            {fix.commands && fix.commands.length > 0 ? (
+                              /* Has commands = Quick Command */
+                              <div className="p-3 bg-slate-950 rounded-lg mb-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className="text-cyan-400 text-xs font-semibold">⚡ Quick Command:</p>
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                                </div>
+                                {fix.commands.map((cmd, i) => (
+                                  <code key={i} className="block text-cyan-300 text-sm font-mono select-all py-0.5">{cmd}</code>
+                                ))}
+                              </div>
+                            ) : fix.steps && fix.steps.length > 0 ? (
+                              /* No commands, has steps = Steps */
                               <div className="mb-3">
-                                <p className="text-slate-300 text-xs font-semibold mb-2">📋 Steps suggested:</p>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className="text-slate-300 text-xs font-semibold">📋 Steps:</p>
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                                </div>
                                 <ol className="list-decimal list-inside space-y-1">
                                   {fix.steps.map((step, i) => (
                                     <li key={i} className="text-slate-400 text-sm">{step}</li>
                                   ))}
                                 </ol>
                               </div>
-                            )}
-                            
-                            {/* Quick command suggested */}
-                            {fix.commands && fix.commands.length > 0 && (
-                              <div className="p-3 bg-slate-950 rounded-lg mb-3">
-                                <p className="text-cyan-400 text-xs font-semibold mb-2">⚡ Quick command suggested:</p>
-                                {fix.commands.map((cmd, i) => (
-                                  <code key={i} className="block text-cyan-300 text-sm font-mono select-all py-0.5">{cmd}</code>
-                                ))}
-                              </div>
-                            )}
+                            ) : null}
 
                             {/* Reference links */}
                             <div className="flex flex-wrap gap-2 mt-3">
@@ -729,13 +734,16 @@ export default function Dashboard() {
                           </div>
                         ))}
 
-                        {/* Script suggested */}
+                        {/* Script */}
                         {(aiSuggestions as { generatedScript?: { content: string; filename: string } }).generatedScript && (
                           <div className="p-4 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-lg border border-cyan-600/30">
-                            <p className="text-cyan-400 text-xs font-semibold mb-3">📜 Script suggested:</p>
+                            <div className="flex items-center gap-2 mb-3">
+                              <p className="text-cyan-400 text-xs font-semibold">📜 Script:</p>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                            </div>
                             <div className="flex items-center justify-between">
                               <div>
-                                <h4 className="text-white font-semibold">Auto-Generated Fix Script</h4>
+                                <h4 className="text-white font-semibold">Automated Fix Script</h4>
                                 <p className="text-slate-400 text-sm">Ready to run on {detectedOS === 'windows' ? '🪟 Windows' : detectedOS === 'macos' ? '🍎 macOS' : '🐧 Linux'}</p>
                               </div>
                               <button
