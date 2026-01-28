@@ -1,0 +1,16 @@
+{
+  "name": "@security-dashboard/backend",
+  "version": "1.0.0",
+  "description": "Security Dashboard Backend API",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "systeminformation": "^5.22.0"
+  }
+}
