@@ -133,22 +133,28 @@ async function fetchLHMDataPowerShell(config) {
   const { promisify } = await import('util');
   const execAsync = promisify(exec);
   
-  // Build PowerShell command
-  let psCommand = `Invoke-RestMethod -Uri 'http://localhost:${config.port}/data.json' -TimeoutSec 5`;
+  // Build PowerShell script
+  const escapedUser = (config.username || '').replace(/'/g, "''");
+  const escapedPass = (config.password || '').replace(/'/g, "''");
+  const url = `http://localhost:${config.port}/data.json`;
   
+  let psScript;
   if (config.username && config.password) {
-    // Escape special characters in password for PowerShell
-    const escapedPass = config.password.replace(/'/g, "''");
-    psCommand = `
-      $cred = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('${config.username}:${escapedPass}'))
-      $headers = @{ Authorization = "Basic $cred" }
-      Invoke-RestMethod -Uri 'http://localhost:${config.port}/data.json' -Headers $headers -TimeoutSec 5 | ConvertTo-Json -Depth 10
-    `;
+    psScript = `
+$cred = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('${escapedUser}:${escapedPass}'))
+$h = @{ Authorization = "Basic $cred" }
+Invoke-RestMethod -Uri '${url}' -Headers $h -TimeoutSec 5 | ConvertTo-Json -Depth 10 -Compress
+`.trim();
+  } else {
+    psScript = `Invoke-RestMethod -Uri '${url}' -TimeoutSec 5 | ConvertTo-Json -Depth 10 -Compress`;
   }
   
+  // Use -Command with encoded command to avoid escaping issues
+  const encodedCmd = Buffer.from(psScript, 'utf16le').toString('base64');
+  
   const { stdout } = await execAsync(
-    `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "${psCommand.replace(/"/g, '\\"')}"`,
-    { timeout: 15000 }
+    `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -EncodedCommand ${encodedCmd}`,
+    { timeout: 15000, maxBuffer: 10 * 1024 * 1024 }
   );
   
   return JSON.parse(stdout);
