@@ -46,6 +46,7 @@ const categoryIcons: Record<string, React.ElementType> = {
   security: LockClosedIcon,
   system: ComputerDesktopIcon,
   application: CommandLineIcon,
+  hardware: ServerIcon,
 };
 
 const statusColors = {

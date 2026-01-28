@@ -6,8 +6,10 @@ import { checkSystemUpdates } from './updates.js';
 import { checkFilePermissions } from './permissions.js';
 import { checkRunningServices } from './services.js';
 import { checkNetworkExposure } from './network.js';
+import { checkHardware } from './hardware.js';
 
 const checks = {
+  hardware: checkHardware,
   openPorts: checkOpenPorts,
   firewall: checkFirewall,
   ssh: checkSSH,
