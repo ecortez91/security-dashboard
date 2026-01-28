@@ -715,19 +715,32 @@ export default function Dashboard() {
                               </div>
                             ) : null}
 
-                            {/* Reference links */}
+                            {/* Reference links - prioritize check-specific docs */}
                             <div className="flex flex-wrap gap-2 mt-3">
-                              {detectedOS === 'linux' && (
+                              {/* Clawdbot/Moltbot specific */}
+                              {modalCheck?.id === 'clawdbot' && (
                                 <>
-                                  <a href={`https://manpages.ubuntu.com/cgi-bin/search.py?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Ubuntu Docs</a>
-                                  <a href={`https://wiki.archlinux.org/index.php?search=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Arch Wiki</a>
+                                  <a href="https://docs.clawd.bot" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 underline font-semibold">📖 Clawdbot Docs</a>
+                                  <a href="https://github.com/clawdbot/clawdbot" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 underline">💻 GitHub</a>
+                                  <span className="text-xs text-purple-400">💡 Tip: Ask Clawdbot to fix this for you!</span>
                                 </>
                               )}
-                              {detectedOS === 'windows' && (
-                                <a href={`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Microsoft Docs</a>
-                              )}
-                              {detectedOS === 'macos' && (
-                                <a href={`https://support.apple.com/en-us/search?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Apple Support</a>
+                              {/* OS-specific docs (secondary for Clawdbot) */}
+                              {modalCheck?.id !== 'clawdbot' && (
+                                <>
+                                  {detectedOS === 'linux' && (
+                                    <>
+                                      <a href={`https://manpages.ubuntu.com/cgi-bin/search.py?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Ubuntu Docs</a>
+                                      <a href={`https://wiki.archlinux.org/index.php?search=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Arch Wiki</a>
+                                    </>
+                                  )}
+                                  {detectedOS === 'windows' && (
+                                    <a href={`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Microsoft Docs</a>
+                                  )}
+                                  {detectedOS === 'macos' && (
+                                    <a href={`https://support.apple.com/en-us/search?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Apple Support</a>
+                                  )}
+                                </>
                               )}
                               <a href={`https://www.google.com/search?q=${encodeURIComponent(fix.title + ' ' + detectedOS + ' official documentation')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-400 underline">🔍 Search more</a>
                             </div>
