@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [modalCheck, setModalCheck] = useState<SecurityCheck | null>(null);
   const [detectedOS, setDetectedOS] = useState<'windows' | 'macos' | 'linux'>('linux');
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
 
   const fetchSecurityChecks = async () => {
     setLoading(true);
@@ -643,8 +644,27 @@ export default function Dashboard() {
                           </pre>
                         </div>
 
+                        {/* Disclaimer - shows once */}
+                        {showDisclaimer && (
+                          <div className="p-4 bg-blue-900/30 rounded-lg border border-blue-600/30 flex items-start justify-between">
+                            <div className="flex items-start gap-3">
+                              <span className="text-xl">📘</span>
+                              <div>
+                                <p className="text-blue-300 text-sm font-semibold">Always verify with official documentation</p>
+                                <p className="text-slate-400 text-xs mt-1">These are AI suggestions. Double-check commands before running them on your system.</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowDisclaimer(false)}
+                              className="text-slate-500 hover:text-slate-300 text-xs"
+                            >
+                              ✕ Got it
+                            </button>
+                          </div>
+                        )}
+
                         {/* Suggested Fixes */}
-                        {(aiSuggestions as { suggestedFixes?: Array<{ title: string; description: string; steps: string[]; commands?: string[]; warning?: string; risk?: string }> }).suggestedFixes?.map((fix, idx) => (
+                        {(aiSuggestions as { suggestedFixes?: Array<{ title: string; description: string; steps: string[]; commands?: string[]; warning?: string; risk?: string; docUrl?: string }> }).suggestedFixes?.map((fix, idx) => (
                           <div key={idx} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
                             <div className="flex items-start justify-between mb-3">
                               <div>
@@ -668,33 +688,55 @@ export default function Dashboard() {
                               </div>
                             )}
                             
-                            <div className="mb-3">
-                              <p className="text-slate-300 text-xs font-semibold mb-2">Steps:</p>
-                              <ol className="list-decimal list-inside space-y-1">
-                                {fix.steps.map((step, i) => (
-                                  <li key={i} className="text-slate-400 text-sm">{step}</li>
-                                ))}
-                              </ol>
-                            </div>
+                            {/* Steps suggested */}
+                            {fix.steps && fix.steps.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-slate-300 text-xs font-semibold mb-2">📋 Steps suggested:</p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                  {fix.steps.map((step, i) => (
+                                    <li key={i} className="text-slate-400 text-sm">{step}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
                             
+                            {/* Quick command suggested */}
                             {fix.commands && fix.commands.length > 0 && (
-                              <div className="p-3 bg-slate-950 rounded-lg">
-                                <p className="text-slate-500 text-xs mb-2">Commands:</p>
+                              <div className="p-3 bg-slate-950 rounded-lg mb-3">
+                                <p className="text-cyan-400 text-xs font-semibold mb-2">⚡ Quick command suggested:</p>
                                 {fix.commands.map((cmd, i) => (
-                                  <code key={i} className="block text-cyan-400 text-sm font-mono select-all">{cmd}</code>
+                                  <code key={i} className="block text-cyan-300 text-sm font-mono select-all py-0.5">{cmd}</code>
                                 ))}
                               </div>
                             )}
+
+                            {/* Reference links */}
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {detectedOS === 'linux' && (
+                                <>
+                                  <a href={`https://manpages.ubuntu.com/cgi-bin/search.py?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Ubuntu Docs</a>
+                                  <a href={`https://wiki.archlinux.org/index.php?search=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Arch Wiki</a>
+                                </>
+                              )}
+                              {detectedOS === 'windows' && (
+                                <a href={`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Microsoft Docs</a>
+                              )}
+                              {detectedOS === 'macos' && (
+                                <a href={`https://support.apple.com/en-us/search?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Apple Support</a>
+                              )}
+                              <a href={`https://www.google.com/search?q=${encodeURIComponent(fix.title + ' ' + detectedOS + ' official documentation')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-400 underline">🔍 Search more</a>
+                            </div>
                           </div>
                         ))}
 
-                        {/* Download Script Button */}
+                        {/* Script suggested */}
                         {(aiSuggestions as { generatedScript?: { content: string; filename: string } }).generatedScript && (
                           <div className="p-4 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-lg border border-cyan-600/30">
+                            <p className="text-cyan-400 text-xs font-semibold mb-3">📜 Script suggested:</p>
                             <div className="flex items-center justify-between">
                               <div>
-                                <h4 className="text-cyan-300 font-semibold">📜 Auto-Generated Fix Script</h4>
-                                <p className="text-slate-400 text-sm">Ready to run on {detectedOS}</p>
+                                <h4 className="text-white font-semibold">Auto-Generated Fix Script</h4>
+                                <p className="text-slate-400 text-sm">Ready to run on {detectedOS === 'windows' ? '🪟 Windows' : detectedOS === 'macos' ? '🍎 macOS' : '🐧 Linux'}</p>
                               </div>
                               <button
                                 onClick={() => {
@@ -703,7 +745,7 @@ export default function Dashboard() {
                                 }}
                                 className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all flex items-center gap-2"
                               >
-                                📥 Download Script
+                                📥 Download
                               </button>
                             </div>
                           </div>
