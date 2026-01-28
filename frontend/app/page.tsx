@@ -80,6 +80,9 @@ export default function Dashboard() {
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, unknown> | null>(null);
   const [loadingAI, setLoadingAI] = useState<string | null>(null);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [modalCheck, setModalCheck] = useState<SecurityCheck | null>(null);
+  const [detectedOS, setDetectedOS] = useState<'windows' | 'macos' | 'linux'>('linux');
 
   const fetchSecurityChecks = async () => {
     setLoading(true);
@@ -120,24 +123,40 @@ export default function Dashboard() {
   const getAISuggestions = async (check: SecurityCheck) => {
     setLoadingAI(check.id);
     setAiSuggestions(null);
+    setModalCheck(check);
+    setShowAIModal(true);
     try {
       const response = await fetch('http://localhost:4000/api/ai-fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ check }),
+        body: JSON.stringify({ check, platform: detectedOS }),
       });
       const suggestions = await response.json();
       setAiSuggestions(suggestions);
     } catch (error) {
       console.error('Failed to get AI suggestions:', error);
-      alert('Failed to get AI suggestions. Check console for details.');
     } finally {
       setLoadingAI(null);
     }
   };
 
+  const downloadScript = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     fetchSecurityChecks();
+    // Detect OS
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('win')) setDetectedOS('windows');
+    else if (ua.includes('mac')) setDetectedOS('macos');
+    else setDetectedOS('linux');
   }, []);
 
   const getScoreColor = (score: number) => {
@@ -572,6 +591,134 @@ export default function Dashboard() {
               })}
             </div>
 
+            {/* AI Suggestion Modal */}
+            {showAIModal && (
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-gradient-to-r from-purple-900/50 to-pink-900/50">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🤖</span>
+                      <div>
+                        <h3 className="text-white font-semibold">AI Fix Suggestions</h3>
+                        <p className="text-slate-400 text-sm">{modalCheck?.name}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowAIModal(false)}
+                      className="p-2 hover:bg-slate-700 rounded-lg transition-all"
+                    >
+                      <XCircleIcon className="w-6 h-6 text-slate-400" />
+                    </button>
+                  </div>
+                  
+                  {/* Modal Body */}
+                  <div className="p-4 overflow-y-auto max-h-[60vh]">
+                    {loadingAI ? (
+                      <div className="flex flex-col items-center py-12">
+                        <ArrowPathIcon className="w-12 h-12 text-purple-400 animate-spin" />
+                        <p className="mt-4 text-slate-400">Analyzing issue & searching for solutions...</p>
+                      </div>
+                    ) : aiSuggestions ? (
+                      <div className="space-y-4">
+                        {/* OS Selector */}
+                        <div className="flex items-center gap-2 p-3 bg-slate-800 rounded-lg">
+                          <span className="text-slate-400 text-sm">Your system:</span>
+                          <select
+                            value={detectedOS}
+                            onChange={(e) => setDetectedOS(e.target.value as 'windows' | 'macos' | 'linux')}
+                            className="bg-slate-700 text-white text-sm px-3 py-1 rounded-lg border border-slate-600"
+                          >
+                            <option value="windows">🪟 Windows</option>
+                            <option value="macos">🍎 macOS</option>
+                            <option value="linux">🐧 Linux</option>
+                          </select>
+                        </div>
+
+                        {/* Analysis */}
+                        <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                          <h4 className="text-purple-300 text-sm font-semibold mb-2">📊 Analysis</h4>
+                          <pre className="text-slate-300 text-sm whitespace-pre-wrap font-mono">
+                            {(aiSuggestions as { analysis?: string }).analysis}
+                          </pre>
+                        </div>
+
+                        {/* Suggested Fixes */}
+                        {(aiSuggestions as { suggestedFixes?: Array<{ title: string; description: string; steps: string[]; commands?: string[]; warning?: string; risk?: string }> }).suggestedFixes?.map((fix, idx) => (
+                          <div key={idx} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h4 className="text-white font-semibold">{fix.title}</h4>
+                                <p className="text-slate-400 text-sm">{fix.description}</p>
+                              </div>
+                              {fix.risk && (
+                                <span className={`px-2 py-1 text-xs rounded-lg ${
+                                  fix.risk === 'high' ? 'bg-red-600/30 text-red-400 border border-red-600/30' :
+                                  fix.risk === 'medium' ? 'bg-amber-600/30 text-amber-400 border border-amber-600/30' :
+                                  'bg-green-600/30 text-green-400 border border-green-600/30'
+                                }`}>
+                                  {fix.risk} risk
+                                </span>
+                              )}
+                            </div>
+                            
+                            {fix.warning && (
+                              <div className="mb-3 p-3 bg-amber-900/30 rounded-lg border border-amber-600/30">
+                                <p className="text-amber-400 text-sm">⚠️ {fix.warning}</p>
+                              </div>
+                            )}
+                            
+                            <div className="mb-3">
+                              <p className="text-slate-300 text-xs font-semibold mb-2">Steps:</p>
+                              <ol className="list-decimal list-inside space-y-1">
+                                {fix.steps.map((step, i) => (
+                                  <li key={i} className="text-slate-400 text-sm">{step}</li>
+                                ))}
+                              </ol>
+                            </div>
+                            
+                            {fix.commands && fix.commands.length > 0 && (
+                              <div className="p-3 bg-slate-950 rounded-lg">
+                                <p className="text-slate-500 text-xs mb-2">Commands:</p>
+                                {fix.commands.map((cmd, i) => (
+                                  <code key={i} className="block text-cyan-400 text-sm font-mono select-all">{cmd}</code>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Download Script Button */}
+                        {(aiSuggestions as { generatedScript?: { content: string; filename: string } }).generatedScript && (
+                          <div className="p-4 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-lg border border-cyan-600/30">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-cyan-300 font-semibold">📜 Auto-Generated Fix Script</h4>
+                                <p className="text-slate-400 text-sm">Ready to run on {detectedOS}</p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const script = (aiSuggestions as { generatedScript: { content: string; filename: string } }).generatedScript;
+                                  downloadScript(script.content, script.filename);
+                                }}
+                                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                              >
+                                📥 Download Script
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-slate-400">
+                        <p>Failed to load suggestions. Try again.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Footer */}
             <div className="mt-8 text-center text-slate-500 text-sm">
               Last scan: {new Date(results.timestamp).toLocaleString()}
@@ -603,3 +750,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
