@@ -1,0 +1,3 @@
+[submodule "tools/thermal-pulse"]
+	path = tools/thermal-pulse
+	url = https://github.com/ecortez91/thermal-pulse.git

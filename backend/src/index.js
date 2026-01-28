@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { runAllChecks, runCheck, applyFix } from './checks/index.js';
+import { getTemperatureData } from './checks/temperature.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -11,6 +12,16 @@ app.use(express.json());
 // Health endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Get temperature data (lightweight, for live widget)
+app.get('/api/temperature', async (req, res) => {
+  try {
+    const data = await getTemperatureData();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Get all security checks

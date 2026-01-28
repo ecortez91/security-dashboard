@@ -7,8 +7,10 @@ import { checkFilePermissions } from './permissions.js';
 import { checkRunningServices } from './services.js';
 import { checkNetworkExposure } from './network.js';
 import { checkHardware } from './hardware.js';
+import { checkTemperature } from './temperature.js';
 
 const checks = {
+  temperature: checkTemperature,
   hardware: checkHardware,
   openPorts: checkOpenPorts,
   firewall: checkFirewall,
