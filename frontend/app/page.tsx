@@ -384,9 +384,9 @@ export default function Dashboard() {
                                         <a
                                           href={`http://localhost:4000/scripts/linux/${fix.script}.sh`}
                                           download
-                                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg transition-all"
+                                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-all whitespace-nowrap"
                                         >
-                                          📥 Script
+                                          📥
                                         </a>
                                       )}
                                       {fix.autoFix ? (
@@ -405,8 +405,8 @@ export default function Dashboard() {
                                           )}
                                         </button>
                                       ) : (
-                                        <span className="px-3 py-2 bg-amber-600/20 text-amber-400 text-xs rounded-lg border border-amber-600/30">
-                                          Manual Fix
+                                        <span className="px-4 py-2 bg-amber-600/20 text-amber-400 text-sm font-medium rounded-lg border border-amber-600/30 whitespace-nowrap">
+                                          Manual
                                         </span>
                                       )}
                                     </div>
