@@ -79,6 +79,30 @@ function parseLHMFans(data) {
   return fans;
 }
 
+// Get NVIDIA GPU info via nvidia-smi
+async function getNvidiaGPUInfo() {
+  try {
+    const { stdout } = await execAsync(
+      `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command "nvidia-smi --query-gpu=temperature.gpu,name,utilization.gpu,fan.speed,memory.used,memory.total --format=csv,noheader"`,
+      { timeout: 8000 }
+    );
+    const parts = stdout.trim().split(',').map(s => s.trim());
+    if (parts.length >= 4) {
+      return {
+        temperature: parseInt(parts[0]),
+        name: parts[1],
+        utilization: parseInt(parts[2]),
+        fanSpeed: parseInt(parts[3]),
+        memoryUsed: parts[4] || null,
+        memoryTotal: parts[5] || null,
+      };
+    }
+  } catch {
+    // nvidia-smi not available or no NVIDIA GPU
+  }
+  return null;
+}
+
 // Get Windows temperature via WMI (works without extra software!)
 async function getWindowsTemperature() {
   try {
@@ -141,15 +165,52 @@ export async function checkHardware() {
       }
     }
     
+    // Get NVIDIA GPU info
+    const gpuInfo = inWSL2 ? await getNvidiaGPUInfo() : null;
+    
     result.details.temperature = {
-      main: temps.main,
+      cpu: temps.main,
+      gpu: gpuInfo?.temperature || lhmTemps?.gpu || null,
       max: temps.max,
       cores: temps.cores,
-      chipset: temps.chipset,
-      gpu: lhmTemps?.gpu || null,
-      all: lhmTemps?.all || [],
-      source: lhmData ? 'LibreHardwareMonitor' : (inWSL2 ? 'wsl2-fallback' : 'native'),
+      source: result.details.dataSource || (inWSL2 ? 'wsl2' : 'native'),
     };
+    
+    // GPU details
+    if (gpuInfo) {
+      result.details.gpu = {
+        name: gpuInfo.name,
+        temperature: gpuInfo.temperature,
+        utilization: gpuInfo.utilization,
+        fanSpeed: gpuInfo.fanSpeed,
+        memoryUsed: gpuInfo.memoryUsed,
+        memoryTotal: gpuInfo.memoryTotal,
+      };
+      
+      // Check GPU temperature
+      if (gpuInfo.temperature > 85) {
+        result.status = 'critical';
+        result.recommendations.push({
+          severity: 'critical',
+          message: `GPU temperature is ${gpuInfo.temperature}°C — CRITICAL! Check cooling.`,
+        });
+      } else if (gpuInfo.temperature > 80) {
+        if (result.status === 'pass') result.status = 'warning';
+        result.recommendations.push({
+          severity: 'high',
+          message: `GPU temperature is ${gpuInfo.temperature}°C — running hot.`,
+        });
+      }
+      
+      // Check GPU fan (0% might mean fans off due to low temp, or stopped fan)
+      if (gpuInfo.fanSpeed === 0 && gpuInfo.temperature > 60) {
+        result.status = 'critical';
+        result.recommendations.push({
+          severity: 'critical',
+          message: `GPU fan is at 0% but temperature is ${gpuInfo.temperature}°C — check fan!`,
+        });
+      }
+    }
     
     // Fan data from LHM
     if (lhmFans && lhmFans.length > 0) {
@@ -167,29 +228,29 @@ export async function checkHardware() {
       }
     }
 
-    // Check for high temperatures
-    if (temps.main) {
-      if (temps.main > 85) {
+    // Check for high CPU temperatures
+    const cpuTemp = result.details.temperature.cpu;
+    if (cpuTemp) {
+      if (cpuTemp > 85) {
         result.status = 'critical';
         result.recommendations.push({
           severity: 'critical',
-          message: `CPU temperature is ${temps.main}°C — CRITICAL! Check cooling immediately.`,
+          message: `CPU temperature is ${cpuTemp}°C — CRITICAL! Check cooling immediately.`,
         });
-      } else if (temps.main > 75) {
-        result.status = 'warning';
+      } else if (cpuTemp > 75) {
+        if (result.status === 'pass') result.status = 'warning';
         result.recommendations.push({
           severity: 'high',
-          message: `CPU temperature is ${temps.main}°C — running hot. Check airflow and fans.`,
+          message: `CPU temperature is ${cpuTemp}°C — running hot. Check airflow and fans.`,
         });
-      } else if (temps.main > 65) {
+      } else if (cpuTemp > 65) {
         result.recommendations.push({
           severity: 'medium',
-          message: `CPU temperature is ${temps.main}°C — warm but acceptable.`,
+          message: `CPU temperature is ${cpuTemp}°C — warm but acceptable.`,
         });
       }
-    } else if (inWSL2 && !temps.main) {
-      // No temperature source available
-      result.details.tempNote = 'Temperature monitoring unavailable. For detailed sensor data, install LibreHardwareMonitor on Windows.';
+    } else if (inWSL2) {
+      result.details.tempNote = 'CPU temperature unavailable via WMI.';
     }
 
     // CPU Info
@@ -303,8 +364,10 @@ export async function checkHardware() {
     } else if (result.status === 'warning') {
       result.message = 'Hardware warnings detected';
     } else {
-      const tempStr = temps.main ? `${temps.main}°C` : 'N/A';
-      result.message = `System healthy — CPU: ${tempStr}, Load: ${Math.round(load.currentLoad)}%, RAM: ${result.details.memory.usedPercent}%`;
+      const cpuTempStr = result.details.temperature.cpu ? `${result.details.temperature.cpu}°C` : 'N/A';
+      const gpuTempStr = result.details.gpu?.temperature ? `${result.details.gpu.temperature}°C` : null;
+      const tempInfo = gpuTempStr ? `CPU: ${cpuTempStr}, GPU: ${gpuTempStr}` : `CPU: ${cpuTempStr}`;
+      result.message = `System healthy — ${tempInfo}, RAM: ${result.details.memory.usedPercent}%`;
     }
 
   } catch (error) {
