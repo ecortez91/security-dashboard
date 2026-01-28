@@ -141,7 +141,7 @@ export default function Dashboard() {
             <button
               onClick={fetchSecurityChecks}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg shadow-cyan-500/25"
             >
               <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Scanning...' : 'Refresh'}
@@ -410,6 +410,16 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Floating Refresh Button */}
+      <button
+        onClick={fetchSecurityChecks}
+        disabled={loading}
+        className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-full shadow-2xl shadow-cyan-500/30 transition-all duration-200 disabled:opacity-50 hover:scale-110 z-50"
+        title="Refresh Security Scan"
+      >
+        <ArrowPathIcon className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} />
+      </button>
     </div>
   );
 }
