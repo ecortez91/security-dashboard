@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { runAllChecks, runCheck, applyFix } from './checks/index.js';

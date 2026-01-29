@@ -1,6 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
+// Dynamic API URL - uses same host as frontend but port 4000
+const getApiBase = () => {
+  if (typeof window === 'undefined') return 'http://localhost:4000';
+  return `http://${window.location.hostname}:4000`;
+};
 import { 
   ShieldCheckIcon, 
   ShieldExclamationIcon,
@@ -73,6 +79,31 @@ const statusIcons = {
   info: InformationCircleIcon,
 };
 
+// Helper to detect if commands are real terminal commands or just suggestions
+const isRealCommand = (commands: string[]): boolean => {
+  if (!commands || commands.length === 0) return false;
+  
+  // Common terminal command prefixes
+  const terminalPrefixes = [
+    'sudo', 'apt', 'apt-get', 'npm', 'yarn', 'pnpm', 'pip', 'pip3',
+    'systemctl', 'service', 'docker', 'git', 'cd', 'mkdir', 'rm', 'mv',
+    'cp', 'chmod', 'chown', 'cat', 'echo', 'export', 'source', 'curl',
+    'wget', 'tar', 'unzip', 'zip', 'grep', 'sed', 'awk', 'find', 'ls',
+    'touch', 'nano', 'vim', 'vi', 'code', 'node', 'python', 'python3',
+    'brew', 'yum', 'dnf', 'pacman', 'snap', 'flatpak', 'ssh', 'scp',
+    'rsync', 'kill', 'pkill', 'ps', 'top', 'htop', 'df', 'du', 'free',
+    'ufw', 'iptables', 'firewall-cmd', 'journalctl', 'dmesg', 'tail',
+    'head', 'less', 'more', 'wc', 'sort', 'uniq', 'xargs', 'tee',
+    'clawdbot', 'clawd', './', '/'
+  ];
+  
+  // Check if first command starts with a terminal prefix
+  const firstCmd = commands[0].trim().toLowerCase();
+  return terminalPrefixes.some(prefix => 
+    firstCmd.startsWith(prefix + ' ') || firstCmd.startsWith(prefix + '\n') || firstCmd === prefix
+  );
+};
+
 export default function Dashboard() {
   const [results, setResults] = useState<SecurityResults | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +119,7 @@ export default function Dashboard() {
   const fetchSecurityChecks = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:4000/api/checks');
+      const response = await fetch(`${getApiBase()}/api/checks`);
       const data = await response.json();
       setResults(data);
     } catch (error) {
@@ -101,7 +132,7 @@ export default function Dashboard() {
   const applyFix = async (fixId: string) => {
     setApplyingFix(fixId);
     try {
-      const response = await fetch(`http://localhost:4000/api/fixes/${fixId}`, {
+      const response = await fetch(`${getApiBase()}/api/fixes/${fixId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -127,7 +158,7 @@ export default function Dashboard() {
     setModalCheck(check);
     setShowAIModal(true);
     try {
-      const response = await fetch('http://localhost:4000/api/ai-fix', {
+      const response = await fetch(`${getApiBase()}/api/ai-fix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ check, platform: detectedOS }),
@@ -330,43 +361,43 @@ export default function Dashboard() {
                   >
                     <button
                       onClick={() => setExpandedCheck(isExpanded ? null : check.id)}
-                      className="w-full p-4 flex items-center gap-4 text-left cursor-pointer hover:bg-slate-700/30 transition-all rounded-t-xl"
+                      className="w-full p-3 sm:p-4 flex items-start sm:items-center gap-3 sm:gap-4 text-left cursor-pointer hover:bg-slate-700/30 transition-all rounded-t-xl"
                     >
-                      <div className={`p-2 rounded-lg ${statusColors[check.status]}`}>
-                        <StatusIcon className="w-5 h-5" />
+                      <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${statusColors[check.status]}`}>
+                        <StatusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-white font-medium">{check.name}</h3>
-                          <span className="px-2 py-0.5 bg-slate-700/50 text-slate-400 text-xs rounded-full flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <h3 className="text-white font-medium text-sm sm:text-base">{check.name}</h3>
+                          <span className="px-1.5 sm:px-2 py-0.5 bg-slate-700/50 text-slate-400 text-[10px] sm:text-xs rounded-full flex items-center gap-1">
                             <CategoryIcon className="w-3 h-3" />
                             {check.category}
                           </span>
                         </div>
-                        <p className="text-slate-400 text-sm mt-1 truncate">{check.message}</p>
+                        <p className="text-slate-400 text-xs sm:text-sm mt-1 line-clamp-2 sm:truncate">{check.message}</p>
                       </div>
 
-                      <div className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${statusColors[check.status]}`}>
+                      <div className={`flex-shrink-0 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium capitalize ${statusColors[check.status]}`}>
                         {check.status}
                       </div>
                     </button>
 
                     {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-slate-700/50 pt-4">
-                        <p className="text-slate-400 text-sm mb-4">{check.description}</p>
+                      <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t border-slate-700/50 pt-3 sm:pt-4">
+                        <p className="text-slate-400 text-xs sm:text-sm mb-3 sm:mb-4">{check.description}</p>
                         
                         {/* Recommendations */}
                         {check.recommendations.length > 0 && (
-                          <div className="mb-4">
-                            <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+                          <div className="mb-3 sm:mb-4">
+                            <h4 className="text-white font-medium text-sm sm:text-base mb-1.5 sm:mb-2 flex items-center gap-2">
                               <ExclamationTriangleIcon className="w-4 h-4 text-amber-500" />
                               Recommendations
                             </h4>
-                            <ul className="space-y-2">
+                            <ul className="space-y-1.5 sm:space-y-2">
                               {check.recommendations.map((rec, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm">
-                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium capitalize ${
+                                <li key={i} className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                                  <span className={`flex-shrink-0 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium capitalize ${
                                     rec.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
                                     rec.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
                                     rec.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
@@ -374,7 +405,7 @@ export default function Dashboard() {
                                   }`}>
                                     {rec.severity}
                                   </span>
-                                  <span className="text-slate-300">{rec.message}</span>
+                                  <span className="text-slate-300 break-words">{rec.message}</span>
                                 </li>
                               ))}
                             </ul>
@@ -384,7 +415,7 @@ export default function Dashboard() {
                         {/* Available Fixes */}
                         {check.fixes.length > 0 && (
                           <div>
-                            <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+                            <h4 className="text-white font-medium text-sm sm:text-base mb-1.5 sm:mb-2 flex items-center gap-2">
                               <WrenchScrewdriverIcon className="w-4 h-4 text-cyan-500" />
                               Available Fixes
                             </h4>
@@ -392,19 +423,19 @@ export default function Dashboard() {
                               {check.fixes.map((fix) => (
                                 <div 
                                   key={fix.id}
-                                  className="p-3 bg-slate-900/50 rounded-lg"
+                                  className="p-2 sm:p-3 bg-slate-900/50 rounded-lg"
                                 >
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="text-white text-sm font-medium">{fix.name}</p>
-                                      <p className="text-slate-400 text-xs">{fix.description}</p>
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="text-white text-xs sm:text-sm font-medium">{fix.name}</p>
+                                      <p className="text-slate-400 text-[10px] sm:text-xs break-words">{fix.description}</p>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-shrink-0">
                                       {fix.script && (
                                         <a
-                                          href={`http://localhost:4000/scripts/linux/${fix.script}.sh`}
+                                          href={`${getApiBase()}/scripts/linux/${fix.script}.sh`}
                                           download
-                                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-all whitespace-nowrap"
+                                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap"
                                         >
                                           📥
                                         </a>
@@ -413,7 +444,7 @@ export default function Dashboard() {
                                         <button
                                           onClick={() => applyFix(fix.id)}
                                           disabled={applyingFix === fix.id}
-                                          className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+                                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
                                         >
                                           {applyingFix === fix.id ? (
                                             <>
@@ -425,7 +456,7 @@ export default function Dashboard() {
                                           )}
                                         </button>
                                       ) : (
-                                        <span className="px-4 py-2 bg-amber-600/20 text-amber-400 text-sm font-medium rounded-lg border border-amber-600/30 whitespace-nowrap">
+                                        <span className="px-3 py-1.5 sm:px-4 sm:py-2 bg-amber-600/20 text-amber-400 text-xs sm:text-sm font-medium rounded-lg border border-amber-600/30 whitespace-nowrap">
                                           Manual Fix
                                         </span>
                                       )}
@@ -434,14 +465,14 @@ export default function Dashboard() {
                                   
                                   {/* Manual Steps */}
                                   {fix.manualSteps && fix.manualSteps.length > 0 && (
-                                    <div className="mt-3 p-3 bg-slate-950 rounded-lg border border-slate-700">
-                                      <p className="text-slate-300 text-xs font-semibold mb-2">📋 Manual Steps:</p>
+                                    <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-slate-950 rounded-lg border border-slate-700">
+                                      <p className="text-slate-300 text-[10px] sm:text-xs font-semibold mb-1.5 sm:mb-2">📋 Manual Steps:</p>
                                       <ol className="list-decimal list-inside space-y-1">
                                         {fix.manualSteps.map((step, idx) => (
-                                          <li key={idx} className="text-slate-400 text-xs">
+                                          <li key={idx} className="text-slate-400 text-[10px] sm:text-xs break-words">
                                             {step.startsWith('Run:') ? (
                                               <>
-                                                Run: <code className="bg-slate-800 px-1 py-0.5 rounded text-cyan-400">{step.replace('Run: ', '')}</code>
+                                                Run: <code className="bg-slate-800 px-1 py-0.5 rounded text-cyan-400 break-all">{step.replace('Run: ', '')}</code>
                                               </>
                                             ) : (
                                               step
@@ -451,8 +482,8 @@ export default function Dashboard() {
                                       </ol>
                                       {fix.command && (
                                         <div className="mt-2 pt-2 border-t border-slate-700">
-                                          <p className="text-slate-500 text-xs">Quick command:</p>
-                                          <code className="block mt-1 p-2 bg-slate-800 rounded text-cyan-400 text-xs select-all">
+                                          <p className="text-slate-500 text-[10px] sm:text-xs">Quick command:</p>
+                                          <code className="block mt-1 p-1.5 sm:p-2 bg-slate-800 rounded text-cyan-400 text-[10px] sm:text-xs select-all break-all overflow-x-auto">
                                             {fix.command}
                                           </code>
                                         </div>
@@ -467,11 +498,11 @@ export default function Dashboard() {
 
                         {/* AI Suggestions Button */}
                         {check.status !== 'pass' && (
-                          <div className="mt-4">
+                          <div className="mt-3 sm:mt-4">
                             <button
                               onClick={() => getAISuggestions(check)}
                               disabled={loadingAI === check.id}
-                              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+                              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
                             >
                               {loadingAI === check.id ? (
                                 <>
@@ -576,11 +607,11 @@ export default function Dashboard() {
 
                         {/* Details */}
                         {Object.keys(check.details).length > 0 && (
-                          <details className="mt-4">
-                            <summary className="text-slate-400 text-sm cursor-pointer hover:text-slate-300">
-                              View Details
+                          <details className="mt-3 sm:mt-4">
+                            <summary className="text-slate-400 text-xs sm:text-sm cursor-pointer hover:text-slate-300">
+                              ▶ View Details
                             </summary>
-                            <pre className="mt-2 p-3 bg-slate-950 rounded-lg text-xs text-slate-400 overflow-x-auto">
+                            <pre className="mt-2 p-2 sm:p-3 bg-slate-950 rounded-lg text-[10px] sm:text-xs text-slate-400 overflow-x-auto max-h-48">
                               {JSON.stringify(check.details, null, 2)}
                             </pre>
                           </details>
@@ -594,15 +625,15 @@ export default function Dashboard() {
 
             {/* AI Suggestion Modal */}
             {showAIModal && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4 overflow-hidden">
+                <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full max-w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[80vh] overflow-hidden shadow-2xl">
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-gradient-to-r from-purple-900/50 to-pink-900/50">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🤖</span>
+                  <div className="flex items-center justify-between p-3 sm:p-4 border-b border-slate-700 bg-gradient-to-r from-purple-900/50 to-pink-900/50">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-xl sm:text-2xl">🤖</span>
                       <div>
-                        <h3 className="text-white font-semibold">AI Fix Suggestions</h3>
-                        <p className="text-slate-400 text-sm">{modalCheck?.name}</p>
+                        <h3 className="text-white font-semibold text-sm sm:text-base">AI Fix Suggestions</h3>
+                        <p className="text-slate-400 text-xs sm:text-sm truncate max-w-[200px] sm:max-w-none">{modalCheck?.name}</p>
                       </div>
                     </div>
                     <button
@@ -614,21 +645,21 @@ export default function Dashboard() {
                   </div>
                   
                   {/* Modal Body */}
-                  <div className="p-4 overflow-y-auto max-h-[60vh]">
+                  <div className="p-3 sm:p-4 overflow-y-auto overflow-x-hidden max-h-[80vh] sm:max-h-[60vh]">
                     {loadingAI ? (
-                      <div className="flex flex-col items-center py-12">
-                        <ArrowPathIcon className="w-12 h-12 text-purple-400 animate-spin" />
-                        <p className="mt-4 text-slate-400">Analyzing issue & searching for solutions...</p>
+                      <div className="flex flex-col items-center py-8 sm:py-12">
+                        <ArrowPathIcon className="w-10 h-10 sm:w-12 sm:h-12 text-purple-400 animate-spin" />
+                        <p className="mt-3 sm:mt-4 text-slate-400 text-sm sm:text-base">Analyzing issue...</p>
                       </div>
                     ) : aiSuggestions ? (
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-4">
                         {/* OS Selector */}
-                        <div className="flex items-center gap-2 p-3 bg-slate-800 rounded-lg">
-                          <span className="text-slate-400 text-sm">Your system:</span>
+                        <div className="flex items-center gap-2 p-2 sm:p-3 bg-slate-800 rounded-lg">
+                          <span className="text-slate-400 text-xs sm:text-sm">Your system:</span>
                           <select
                             value={detectedOS}
                             onChange={(e) => setDetectedOS(e.target.value as 'windows' | 'macos' | 'linux')}
-                            className="bg-slate-700 text-white text-sm px-3 py-1 rounded-lg border border-slate-600"
+                            className="bg-slate-700 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-lg border border-slate-600"
                           >
                             <option value="windows">🪟 Windows</option>
                             <option value="macos">🍎 macOS</option>
@@ -637,52 +668,53 @@ export default function Dashboard() {
                         </div>
 
                         {/* Analysis - Human readable summary */}
-                        <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                          <h4 className="text-purple-300 text-sm font-semibold mb-3">📊 Analysis Summary</h4>
+                        <div className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                          <h4 className="text-purple-300 text-xs sm:text-sm font-semibold mb-2 sm:mb-3">📊 Analysis Summary</h4>
                           
                           {/* Issue Summary */}
-                          <div className="flex flex-wrap gap-3 mb-4">
+                          {/* Issue Summary */}
+                          <div className="flex flex-wrap gap-2 sm:gap-3 mb-3 sm:mb-4">
                             {modalCheck?.status === 'critical' && (
-                              <div className="flex items-center gap-2 px-3 py-2 bg-red-900/30 rounded-lg border border-red-600/30">
-                                <span className="text-red-400 text-lg">🔴</span>
+                              <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/30 rounded-lg border border-red-600/30">
+                                <span className="text-red-400 text-base sm:text-lg">🔴</span>
                                 <div>
-                                  <p className="text-red-400 font-semibold text-sm">Critical Issue</p>
-                                  <p className="text-red-300/70 text-xs">Needs immediate attention</p>
+                                  <p className="text-red-400 font-semibold text-xs sm:text-sm">Critical Issue</p>
+                                  <p className="text-red-300/70 text-[10px] sm:text-xs">Needs immediate attention</p>
                                 </div>
                               </div>
                             )}
                             {modalCheck?.status === 'warning' && (
-                              <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/30 rounded-lg border border-amber-600/30">
-                                <span className="text-amber-400 text-lg">🟡</span>
+                              <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-amber-900/30 rounded-lg border border-amber-600/30">
+                                <span className="text-amber-400 text-base sm:text-lg">🟡</span>
                                 <div>
-                                  <p className="text-amber-400 font-semibold text-sm">Warning</p>
-                                  <p className="text-amber-300/70 text-xs">Should be addressed</p>
+                                  <p className="text-amber-400 font-semibold text-xs sm:text-sm">Warning</p>
+                                  <p className="text-amber-300/70 text-[10px] sm:text-xs">Should be addressed</p>
                                 </div>
                               </div>
                             )}
                           </div>
 
                           {/* What's wrong - plain language */}
-                          <div className="mb-4">
-                            <p className="text-slate-400 text-xs font-semibold mb-1">What&apos;s wrong:</p>
-                            <p className="text-white text-sm">{modalCheck?.message}</p>
+                          <div className="mb-3 sm:mb-4 overflow-hidden">
+                            <p className="text-slate-400 text-[10px] sm:text-xs font-semibold mb-1">What&apos;s wrong:</p>
+                            <p className="text-white text-xs sm:text-sm break-words">{modalCheck?.message}</p>
                           </div>
 
                           {/* Key issues list */}
                           {modalCheck?.recommendations && modalCheck.recommendations.length > 0 && (
-                            <div className="mb-4">
-                              <p className="text-slate-400 text-xs font-semibold mb-2">Issues found:</p>
-                              <ul className="space-y-1">
+                            <div className="mb-3 sm:mb-4">
+                              <p className="text-slate-400 text-[10px] sm:text-xs font-semibold mb-1.5 sm:mb-2">Issues found:</p>
+                              <ul className="space-y-1 overflow-hidden">
                                 {modalCheck.recommendations.slice(0, 5).map((rec, i) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm">
-                                    <span className={rec.severity === 'critical' ? 'text-red-400' : rec.severity === 'high' ? 'text-amber-400' : 'text-slate-400'}>
+                                  <li key={i} className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm min-w-0">
+                                    <span className={`flex-shrink-0 ${rec.severity === 'critical' ? 'text-red-400' : rec.severity === 'high' ? 'text-amber-400' : 'text-slate-400'}`}>
                                       {rec.severity === 'critical' ? '🔴' : rec.severity === 'high' ? '🟡' : '🔵'}
                                     </span>
-                                    <span className="text-slate-300">{rec.message.split(']').pop()?.trim() || rec.message}</span>
+                                    <span className="text-slate-300 break-all">{rec.message.split(']').pop()?.trim() || rec.message}</span>
                                   </li>
                                 ))}
                                 {modalCheck.recommendations.length > 5 && (
-                                  <li className="text-slate-500 text-xs ml-6">...and {modalCheck.recommendations.length - 5} more</li>
+                                  <li className="text-slate-500 text-[10px] sm:text-xs ml-5 sm:ml-6">...and {modalCheck.recommendations.length - 5} more</li>
                                 )}
                               </ul>
                             </div>
@@ -699,83 +731,85 @@ export default function Dashboard() {
 
                         {/* Disclaimer - shows once */}
                         {showDisclaimer && (
-                          <div className="p-4 bg-blue-900/30 rounded-lg border border-blue-600/30 flex items-start justify-between">
-                            <div className="flex items-start gap-3">
-                              <span className="text-xl">📘</span>
+                          <div className="p-2.5 sm:p-4 bg-blue-900/30 rounded-lg border border-blue-600/30 flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 sm:gap-3">
+                              <span className="text-base sm:text-xl">📘</span>
                               <div>
-                                <p className="text-blue-300 text-sm font-semibold">Always verify with official documentation</p>
-                                <p className="text-slate-400 text-xs mt-1">These are AI suggestions. Double-check commands before running them on your system.</p>
+                                <p className="text-blue-300 text-xs sm:text-sm font-semibold">Verify with official docs</p>
+                                <p className="text-slate-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">AI suggestions. Double-check before running.</p>
                               </div>
                             </div>
                             <button
                               onClick={() => setShowDisclaimer(false)}
-                              className="text-slate-500 hover:text-slate-300 text-xs"
+                              className="text-slate-500 hover:text-slate-300 text-xs flex-shrink-0"
                             >
-                              ✕ Got it
+                              ✕
                             </button>
                           </div>
                         )}
 
                         {/* Suggested Fixes */}
                         {(aiSuggestions as { suggestedFixes?: Array<{ title: string; description: string; steps: string[]; commands?: string[]; warning?: string; risk?: string; docUrl?: string }> }).suggestedFixes?.map((fix, idx) => (
-                          <div key={idx} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <h4 className="text-white font-semibold">{fix.title}</h4>
-                                <p className="text-slate-400 text-sm">{fix.description}</p>
+                          <div key={idx} className="p-2.5 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                            <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+                              <div className="min-w-0">
+                                <h4 className="text-white font-semibold text-sm sm:text-base">{fix.title}</h4>
+                                <p className="text-slate-400 text-xs sm:text-sm">{fix.description}</p>
                               </div>
                               {fix.risk && (
-                                <span className={`px-2 py-1 text-xs rounded-lg ${
+                                <span className={`flex-shrink-0 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded-lg ${
                                   fix.risk === 'high' ? 'bg-red-600/30 text-red-400 border border-red-600/30' :
                                   fix.risk === 'medium' ? 'bg-amber-600/30 text-amber-400 border border-amber-600/30' :
                                   'bg-green-600/30 text-green-400 border border-green-600/30'
                                 }`}>
-                                  {fix.risk} risk
+                                  {fix.risk}
                                 </span>
                               )}
                             </div>
                             
                             {fix.warning && (
-                              <div className="mb-3 p-3 bg-amber-900/30 rounded-lg border border-amber-600/30">
-                                <p className="text-amber-400 text-sm">⚠️ {fix.warning}</p>
+                              <div className="mb-2 sm:mb-3 p-2 sm:p-3 bg-amber-900/30 rounded-lg border border-amber-600/30">
+                                <p className="text-amber-400 text-xs sm:text-sm">⚠️ {fix.warning}</p>
                               </div>
                             )}
                             
                             {/* Determine fix type and show appropriate label */}
                             {fix.commands && fix.commands.length > 0 ? (
-                              /* Has commands = Quick Command */
-                              <div className="p-3 bg-slate-950 rounded-lg mb-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <p className="text-cyan-400 text-xs font-semibold">⚡ Quick Command:</p>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                              /* Has commands - check if real terminal command or suggestion */
+                              <div className="p-2 sm:p-3 bg-slate-950 rounded-lg mb-2 sm:mb-3 overflow-x-auto">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                                  <p className="text-cyan-400 text-[10px] sm:text-xs font-semibold">
+                                    {isRealCommand(fix.commands) ? '⚡ Quick command:' : '💡 Quick suggestion:'}
+                                  </p>
+                                  <span className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI</span>
                                 </div>
                                 {fix.commands.map((cmd, i) => (
-                                  <code key={i} className="block text-cyan-300 text-sm font-mono select-all py-0.5">{cmd}</code>
+                                  <code key={i} className={`block text-[11px] sm:text-sm font-mono select-all py-0.5 break-all ${isRealCommand(fix.commands) ? 'text-cyan-300' : 'text-slate-300'}`}>{cmd}</code>
                                 ))}
                               </div>
                             ) : fix.steps && fix.steps.length > 0 ? (
                               /* No commands, has steps = Steps */
-                              <div className="mb-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <p className="text-slate-300 text-xs font-semibold">📋 Steps:</p>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                              <div className="mb-2 sm:mb-3">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                                  <p className="text-slate-300 text-[10px] sm:text-xs font-semibold">📋 Steps:</p>
+                                  <span className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI</span>
                                 </div>
                                 <ol className="list-decimal list-inside space-y-1">
                                   {fix.steps.map((step, i) => (
-                                    <li key={i} className="text-slate-400 text-sm">{step}</li>
+                                    <li key={i} className="text-slate-400 text-xs sm:text-sm">{step}</li>
                                   ))}
                                 </ol>
                               </div>
                             ) : null}
 
                             {/* Reference links - prioritize check-specific docs */}
-                            <div className="flex flex-wrap gap-2 mt-3">
+                            <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2 sm:mt-3">
                               {/* Clawdbot/Moltbot specific */}
                               {modalCheck?.id === 'clawdbot' && (
                                 <>
-                                  <a href="https://docs.clawd.bot" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 underline font-semibold">📖 Clawdbot Docs</a>
-                                  <a href="https://github.com/clawdbot/clawdbot" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 underline">💻 GitHub</a>
-                                  <span className="text-xs text-purple-400">💡 Tip: Ask Clawdbot to fix this for you!</span>
+                                  <a href="https://docs.clawd.bot" target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-cyan-400 hover:text-cyan-300 underline font-semibold">📖 Docs</a>
+                                  <a href="https://github.com/clawdbot/clawdbot" target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-cyan-400 hover:text-cyan-300 underline">💻 GitHub</a>
+                                  <span className="text-[10px] sm:text-xs text-purple-400">💡 Ask Clawdbot!</span>
                                 </>
                               )}
                               {/* OS-specific docs (secondary for Clawdbot) */}
@@ -783,41 +817,40 @@ export default function Dashboard() {
                                 <>
                                   {detectedOS === 'linux' && (
                                     <>
-                                      <a href={`https://manpages.ubuntu.com/cgi-bin/search.py?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Ubuntu Docs</a>
-                                      <a href={`https://wiki.archlinux.org/index.php?search=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Arch Wiki</a>
+                                      <a href={`https://manpages.ubuntu.com/cgi-bin/search.py?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-blue-400 hover:text-blue-300 underline">📖 Ubuntu</a>
+                                      <a href={`https://wiki.archlinux.org/index.php?search=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-blue-400 hover:text-blue-300 underline">📖 Arch</a>
                                     </>
                                   )}
                                   {detectedOS === 'windows' && (
-                                    <a href={`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Microsoft Docs</a>
+                                    <a href={`https://learn.microsoft.com/en-us/search/?terms=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-blue-400 hover:text-blue-300 underline">📖 Microsoft</a>
                                   )}
                                   {detectedOS === 'macos' && (
-                                    <a href={`https://support.apple.com/en-us/search?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 underline">📖 Apple Support</a>
+                                    <a href={`https://support.apple.com/en-us/search?q=${encodeURIComponent(fix.title)}`} target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-xs text-blue-400 hover:text-blue-300 underline">📖 Apple</a>
                                   )}
                                 </>
                               )}
-                              <a href={`https://www.google.com/search?q=${encodeURIComponent(fix.title + ' ' + detectedOS + ' official documentation')}`} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-400 underline">🔍 Search more</a>
                             </div>
                           </div>
                         ))}
 
                         {/* Script */}
                         {(aiSuggestions as { generatedScript?: { content: string; filename: string } }).generatedScript && (
-                          <div className="p-4 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-lg border border-cyan-600/30">
-                            <div className="flex items-center gap-2 mb-3">
-                              <p className="text-cyan-400 text-xs font-semibold">📜 Script:</p>
-                              <span className="text-[10px] px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI Generated</span>
+                          <div className="p-2.5 sm:p-4 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-lg border border-cyan-600/30">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                              <p className="text-cyan-400 text-[10px] sm:text-xs font-semibold">📜 Script:</p>
+                              <span className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">🤖 AI</span>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="text-white font-semibold">Automated Fix Script</h4>
-                                <p className="text-slate-400 text-sm">Ready to run on {detectedOS === 'windows' ? '🪟 Windows' : detectedOS === 'macos' ? '🍎 macOS' : '🐧 Linux'}</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <h4 className="text-white font-semibold text-sm sm:text-base">Fix Script</h4>
+                                <p className="text-slate-400 text-[10px] sm:text-sm">For {detectedOS === 'windows' ? '🪟 Win' : detectedOS === 'macos' ? '🍎 Mac' : '🐧 Linux'}</p>
                               </div>
                               <button
                                 onClick={() => {
                                   const script = (aiSuggestions as { generatedScript: { content: string; filename: string } }).generatedScript;
                                   downloadScript(script.content, script.filename);
                                 }}
-                                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                                className="flex-shrink-0 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg transition-all"
                               >
                                 📥 Download
                               </button>
@@ -826,8 +859,8 @@ export default function Dashboard() {
                         )}
                       </div>
                     ) : (
-                      <div className="text-center py-12 text-slate-400">
-                        <p>Failed to load suggestions. Try again.</p>
+                      <div className="text-center py-8 sm:py-12 text-slate-400">
+                        <p className="text-sm sm:text-base">Failed to load suggestions. Try again.</p>
                       </div>
                     )}
                   </div>
