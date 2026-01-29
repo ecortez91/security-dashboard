@@ -420,7 +420,7 @@ export default function Dashboard() {
                               Available Fixes
                             </h4>
                             <div className="space-y-2">
-                              {check.fixes.filter((fix) => !fix.platform || fix.platform === detectedOS).map((fix) => (
+                              {check.fixes.map((fix) => (
                                 <div 
                                   key={fix.id}
                                   className="p-2 sm:p-3 bg-slate-900/50 rounded-lg"
