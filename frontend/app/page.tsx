@@ -420,14 +420,21 @@ export default function Dashboard() {
                               Available Fixes
                             </h4>
                             <div className="space-y-2">
-                              {check.fixes.map((fix) => (
+                              {check.fixes.filter((fix) => !fix.platform || fix.platform === detectedOS).map((fix) => (
                                 <div 
                                   key={fix.id}
                                   className="p-2 sm:p-3 bg-slate-900/50 rounded-lg"
                                 >
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div className="min-w-0">
-                                      <p className="text-white text-xs sm:text-sm font-medium">{fix.name}</p>
+                                      <p className="text-white text-xs sm:text-sm font-medium">
+                                        {fix.name}
+                                        {fix.platform && (
+                                          <span className="ml-2 text-[10px] text-slate-500">
+                                            ({fix.platform === 'windows' ? '🪟 Windows' : fix.platform === 'macos' ? '🍎 macOS' : '🐧 Linux'})
+                                          </span>
+                                        )}
+                                      </p>
                                       <p className="text-slate-400 text-[10px] sm:text-xs break-words">{fix.description}</p>
                                     </div>
                                     <div className="flex gap-2 flex-shrink-0">

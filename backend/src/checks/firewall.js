@@ -100,8 +100,9 @@ export async function checkFirewall() {
         message: 'Your system has no firewall protection. All network ports are potentially exposed to attackers.',
       });
       result.fixes.push({
-        id: 'enable_ufw',
-        name: 'Enable Firewall (Linux)',
+        id: 'enable_firewall_linux',
+        name: 'Enable Firewall',
+        platform: 'linux',
         description: 'Enable UFW/firewalld/iptables with secure defaults',
         autoFix: true,
         script: 'enable-firewall',
@@ -111,6 +112,30 @@ export async function checkFirewall() {
           'Run: sudo ufw default allow outgoing',
           'Run: sudo ufw allow ssh (to prevent lockout)',
           'Run: sudo ufw status (verify)'
+        ]
+      });
+      result.fixes.push({
+        id: 'enable_firewall_windows',
+        name: 'Enable Firewall',
+        platform: 'windows',
+        description: 'Enable Windows Defender Firewall for all profiles',
+        autoFix: false,
+        manualSteps: [
+          'Run: Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True',
+          'Or: Open Windows Security → Firewall & network protection',
+          'Turn ON firewall for Domain, Private, and Public networks'
+        ]
+      });
+      result.fixes.push({
+        id: 'enable_firewall_macos',
+        name: 'Enable Firewall',
+        platform: 'macos',
+        description: 'Enable macOS Application Firewall',
+        autoFix: false,
+        manualSteps: [
+          'Run: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on',
+          'Or: System Settings → Network → Firewall → Turn On',
+          'Enable "Block all incoming connections" for maximum security'
         ]
       });
     } else {
