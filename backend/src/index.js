@@ -241,8 +241,8 @@ echo "⚠️ Password authentication is now DISABLED"
   
   // Default fallback
   return platform === 'windows' 
-    ? \`# Script: \${scriptId}\\n# Platform: \${platform}\\nWrite-Host "Script not yet implemented"\`
-    : \`#!/bin/bash\\n# Script: \${scriptId}\\n# Platform: \${platform}\\necho "Script not yet implemented"\`;
+    ? `# Script: ${scriptId}\n# Platform: ${platform}\nWrite-Host "Script not yet implemented"`
+    : `#!/bin/bash\n# Script: ${scriptId}\n# Platform: ${platform}\necho "Script not yet implemented"`;
 }
 
 // AI-powered fix suggestions
