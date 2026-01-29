@@ -433,8 +433,8 @@ export default function Dashboard() {
                                     <div className="flex gap-2 flex-shrink-0">
                                       {fix.script && (
                                         <a
-                                          href={`${getApiBase()}/scripts/linux/${fix.script}.sh`}
-                                          download={`${fix.script}.sh`}
+                                          href={`${getApiBase()}/api/scripts/${fix.script}/download?platform=${detectedOS === 'macos' ? 'macos' : detectedOS}`}
+                                          download={`${fix.script}.${detectedOS === 'windows' ? 'ps1' : 'sh'}`}
                                           className="px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap"
                                         >
                                           Download script ⬇️
