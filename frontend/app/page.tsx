@@ -738,7 +738,7 @@ echo "✅ Done!"
                                     <span className={`flex-shrink-0 ${rec.severity === 'critical' ? 'text-red-400' : rec.severity === 'high' ? 'text-amber-400' : 'text-slate-400'}`}>
                                       {rec.severity === 'critical' ? '🔴' : rec.severity === 'high' ? '🟡' : '🔵'}
                                     </span>
-                                    <span className="text-slate-300 break-all">{rec.message.split(']').pop()?.trim() || rec.message}</span>
+                                    <span className="text-slate-300 break-words">{rec.message.split(']').pop()?.trim() || rec.message}</span>
                                   </li>
                                 ))}
                                 {modalCheck.recommendations.length > 5 && (
