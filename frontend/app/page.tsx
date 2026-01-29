@@ -431,15 +431,6 @@ export default function Dashboard() {
                                       <p className="text-slate-400 text-[10px] sm:text-xs break-words">{fix.description}</p>
                                     </div>
                                     <div className="flex gap-2 flex-shrink-0">
-                                      {fix.script && (
-                                        <a
-                                          href={`${getApiBase()}/api/scripts/${fix.script}/download?platform=${detectedOS === 'macos' ? 'macos' : detectedOS}`}
-                                          download={`${fix.script}.${detectedOS === 'windows' ? 'ps1' : 'sh'}`}
-                                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap"
-                                        >
-                                          Download script ⬇️
-                                        </a>
-                                      )}
                                       {fix.autoFix ? (
                                         <button
                                           onClick={() => applyFix(fix.id)}
