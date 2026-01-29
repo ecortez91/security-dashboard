@@ -434,10 +434,10 @@ export default function Dashboard() {
                                       {fix.script && (
                                         <a
                                           href={`${getApiBase()}/scripts/linux/${fix.script}.sh`}
-                                          download
+                                          download={`${fix.script}.sh`}
                                           className="px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-all whitespace-nowrap"
                                         >
-                                          📥
+                                          Download script ⬇️
                                         </a>
                                       )}
                                       {fix.autoFix ? (
@@ -594,7 +594,7 @@ export default function Dashboard() {
                                     }}
                                     className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded transition-all"
                                   >
-                                    📥 Download Script
+                                    Download script ⬇️
                                   </button>
                                 </div>
                                 <pre className="text-slate-400 text-xs overflow-x-auto max-h-40 overflow-y-auto">
@@ -852,7 +852,7 @@ export default function Dashboard() {
                                 }}
                                 className="flex-shrink-0 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg transition-all"
                               >
-                                📥 Download
+                                Download script ⬇️
                               </button>
                             </div>
                           </div>
